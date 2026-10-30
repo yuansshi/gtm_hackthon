@@ -1,0 +1,16 @@
+# Hackathon coverage and remaining work
+
+Source: [AI GTM Engine hackathon brief](https://docs.google.com/document/d/1JMdBeOzpCk7towtxNF_29RgdzFSAb83U-HJ2W1f7f88/edit?tab=t.0), reviewed October 30, 2026. This is a paraphrased implementation checklist, not a prediction of the judges' score.
+
+| Area | Implemented and inspectable | Remaining for a strong submission |
+| --- | --- | --- |
+| ICP + discovery (20) | Structured industrial ICP, company/product constraints, reference-win input, classification/size/revenue fields, visible 0–1 coverage and proposal provenance, persisted accept/adjust/dismiss review, optional structured model adapter (fixture-tested, live unverified), adjacent acceptance, scoped real company citations, explainable scoring, competitors, live source checks, enforced geography/product/domain exclusions | Live model verification, open-ended discovery, dated buying-cycle signals, size/revenue verification, supported non-US collections, richer competitor research |
+| Enrichment + outreach (20) | Public contact research/MX, source-grounded email/LinkedIn A/B and follow-up drafts, optional structured model drafts with inline source and claim checks (live unverified), edit/reject, exact-version server HITL, dry-run receipt/idempotency | Vendor enrichment, named decision-maker email/LinkedIn verification, opt-out/suppression, real provider delivery and feedback ingestion |
+| Dashboard (15) | Industrial Kanban, timestamps/actors, historical milestones, industry/tier counts, A/B observations, activity, independent businesses | CRM/calendar/reply ingestion, campaign/cohort filters and stronger attribution, production access control |
+| Viability (15) | Persistent server state, primary citations, unknown specs preserved, RFQ and engineering stages, cost/usage ledger | Customer validation, real deliverability, pricing/unit economics, deployment operations, maintained graph engine decision |
+| Execution + demo (10) | Working local five-module demo, tests/build/audit, system design, demo script, 2:51 narrated desktop walkthrough, native graph paths | Public deployment/repository, final full submission verification; consider continuous live screen capture after real providers connect |
+| Band bonus (+20) | Local role-based steps and visible handoff summaries; dummy config | Genuine registered agents and @mention routing/HITL, actual token/cost telemetry; currently **not connected** |
+| Flexprice bonus (+20) | Desktop balance/reload page, server-validated packs and custom grants, persisted receipts and retry deduplication, atomic local credit checks, ledger, refund recovery, per-lead usage | Remote customer/wallet, event outbox/ingestion/reconciliation and actual credit enforcement; currently **not connected** |
+| Snyk | CI workflow for SAST + SCA; dependency override; npm audit clean | Project Snyk token, repository publication, passing real scans |
+
+Highest-value next work with real credentials: (1) model/search/enrichment for source-backed buyer discovery, (2) Band and Flexprice adapters and verified provider receipts, (3) deployment, public source and recorded demonstration. Dummy credentials cannot establish these provider connections or earn their integration claims.

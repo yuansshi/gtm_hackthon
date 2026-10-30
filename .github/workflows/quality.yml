@@ -1,0 +1,35 @@
+name: Quality and security
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --audit-level=high
+  snyk:
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Require project Snyk credentials
+        run: test -n "$SNYK_TOKEN" || { echo 'Configure the project SNYK_TOKEN repository secret to run SAST and SCA.'; exit 1; }
+      - uses: snyk/actions/setup@11b673cfb4b0dc0d860a1323caa199d54950dcce
+      - name: Dependency analysis
+        run: snyk test --severity-threshold=high
+      - name: Source analysis
+        run: snyk code test --severity-threshold=high
