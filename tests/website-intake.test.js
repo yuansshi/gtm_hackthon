@@ -21,7 +21,7 @@ async function setup(t,options={}) {
   const directory=await mkdtemp(path.join(os.tmpdir(),'gtm-website-')); const store=createStore(directory);
   t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
   const graph=options.graph||memoryGraph();
-  const service=createService({store,graph,readWebsiteSource:options.source||source,review:async(candidate,state)=>reviewCandidate(candidate,state,{fetcher:async()=>{throw Error('No fixture network');}}),...options.service});
+  const service=createService({store,graph,readWebsiteSource:options.source||source,review:async(candidate,state)=>reviewCandidate(candidate,state,{readSource:async()=>{throw Error('No fixture network');}}),...options.service});
   service.approveProfile('allco',true,store.read('allco').revision);
   const start=(overrides={})=>service.startWebsiteIntake('allco',{requestId:randomUUID(),revision:store.read('allco').revision,urls:[root,contact],...overrides});
   const payload=(overrides={})=>({revision:store.read('allco').revision,acknowledged:true,name:'Example Equipment',industry:'Construction equipment',location:'Columbus, Ohio',country:'United States',buyerType:'OEM',productFamily:'excavator',application:'Hydraulic excavator assemblies',reason:'Hypothesis: excavator systems may require cylinders; specifications and supplier access need review.',publicEmail:'sales@example-equipment.test',quotes:{organization:{url:root,text:org},application:{url:root,text:application},geography:{url:contact,text:geography}},...overrides});

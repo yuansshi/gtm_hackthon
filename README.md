@@ -43,6 +43,8 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | Billing / Flexprice | Atomic local demo credit ledger; no external wallet, billing event ingestion, or real charge |
 | Security scans | npm audit and GitHub verify pass; Snyk workflow stops at the missing project-token check before SAST/SCA |
 
+Public-page research shares one DNS-pinned HTTPS reader across curated accounts, website intake/refresh, prospect search and market signals. Curated sources retain their host allowlist. See [Source retrieval](docs/source-retrieval.md) for redirect, TLS, byte and deadline limits.
+
 No RFQ, buying intent, direct buyer email, certification, technical compatibility, price advantage, or delivery commitment is fabricated. A failed refresh preserves its failure status; it does not silently turn cached research into fresh verification.
 
 ## Persistence and operation
@@ -181,3 +183,5 @@ An accepted positive event can contextualize template and explicitly requested m
 Daily or weekly checks require an explicit two-credit schedule acknowledgement. The server checks due monitors every minute, at most one account per business per tick. It performs no catch-up burst. Profile changes, insufficient credits or scope failures pause the schedule; interruption refunds once and requires schedule review. A stopped server performs no monitoring. The prototype retains up to 50 signal records and 100 check receipts per account. Source monitoring does not use an external model or search-provider key.
 
 Validation: all 115 tests, build and dependency audit pass. Twenty signal tests cover extraction boundaries, source/date review, quota and source scope, retries, negative holds, draft freshness, immutable receipts, graph repair, persistence/restart, scheduler gates, native signal paths and HTTP policy. A live Elliott page fetch succeeded but its retained text had no usable event date, so it could not become dated context. Link-Belt’s tested news page exceeded the reader’s size limit and was rejected. Full event-to-HITL and timed monitoring were verified with labeled isolated fixtures; no synthetic event was applied to the main campaigns. See [Market signals](docs/market-signals.md).
+
+Security verification update: 121 tests pass, including six curated-transport integration tests. Live Elliott and Altec page fetches succeeded through the shared pinned reader without changing campaign data. Build and npm audit pass; Snyk still requires the project token and actual passing scans.
