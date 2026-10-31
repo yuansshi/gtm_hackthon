@@ -13,4 +13,4 @@ export async function api(path, method = 'GET', body) {
   if (!response.ok) { if (response.status === 401) csrf = ''; const error = new Error(data.error || 'Request failed'); error.code = data.code; throw error; }
   return data;
 }
-export const profileOf = s => Object.fromEntries(['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'].map(k => [k, s[k]]));
+export const profileOf = s => Object.fromEntries(['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions','expansionAdjustments'].map(k => [k, s[k]]));

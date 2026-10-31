@@ -10,6 +10,8 @@ const directory = process.env.DATA_DIR;
 assert.ok(directory && path.isAbsolute(directory) && !directory.endsWith('/.data'), 'Use an isolated data volume.');
 const moduleAt = name => import(pathToFileURL(path.resolve('server',name)).href);
 const leadId = 'deployment-fixture';
+const expansionPlan={name:'Synthetic forklift equipment OEMs',reason:'Synthetic owner interpretation; technical suitability remains unknown.'};
+const assertExpansionPlan=state=>{assert.equal(state.expansionDecisions.forklifts,'accepted');assert.deepEqual(state.expansionAdjustments.forklifts,expansionPlan);};
 // Synthetic owner inputs, never supplier prices or verified contract economics.
 const commercialPlan = {monetizationModel:'Synthetic manufacturing per order',pricingFramework:'Synthetic quote after drawing review',targetContractValue:'USD 25,000–50,000 per synthetic order'};
 const productDescription='Synthetic custom hydraulic cylinders, subject to application review';
@@ -39,6 +41,7 @@ if (phase === 'seed') {
     const state = store.read('allco');
     assert.equal(state.signalFixture,true);assert.equal(state.wallet.credits,123);
     assertReviewedIntake(state);
+    assertExpansionPlan(state);
     assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');
     assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');
     assert.equal(state.leads[0].management.nextAction.text,'Review synthetic supplier requirements');
@@ -89,6 +92,8 @@ if (phase === 'seed') {
     state=await json(`/api/businesses/allco/assistant/intake/${run.id}/review`,'POST',{revision:state.revision,acknowledged:true,decisions:run.result.suggestions.map(s=>({field:s.field,decision:'accepted'}))});
     assert.match(state.icp.regions,/United States/);assert.ok(state.icp.segments.some(s=>/OEM|manufacturer/i.test(s)));
     assertReviewedIntake(state);
+    const profile=Object.fromEntries(['company','productFamilies','capabilities','commercial','icp','expansionDecisions'].map(key=>[key,state[key]]));profile.expansionDecisions={...profile.expansionDecisions,forklifts:'accepted'};profile.expansionAdjustments={forklifts:expansionPlan};
+    state=await json('/api/businesses/allco/profile','PUT',{profile,revision:state.revision});assertExpansionPlan(state);
     state=await json('/api/businesses/allco/approve','POST',{acknowledged:true,revision:state.revision});assert.equal(state.approved,true);
     state=await json(`/api/businesses/allco/leads/${leadId}/selection`,'PATCH',{selected:true});
     const graph=await json('/api/businesses/allco/graph/query','POST',{});assert.match(graph.engine,/Kuzu/);assert.ok(graph.paths.length>0);assert.ok(graph.edges.some(e=>e.type==='matched_to'));
@@ -111,7 +116,7 @@ if (phase === 'seed') {
   } else {
     assert.equal(state.wallet.credits,123);assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');assert.equal(state.leads[0].stage,'Replied');assert.equal(state.metrics.simulated,1);assert.equal(state.metrics.replied,1);
     assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');assert.equal(state.leads[0].management.nextAction.status,'open');
-    assertReviewedIntake(state);
+    assertReviewedIntake(state);assertExpansionPlan(state);
     const before=state.wallet.credits;state=await json(`/api/businesses/allco/drafts/${state.drafts[0].id}/simulate`,'POST',{});assert.equal(state.wallet.credits,before);assert.equal(state.metrics.simulated,1);
     console.log('Fresh server sessions read persisted campaign state; replay does not create a second receipt/debit.');
   }

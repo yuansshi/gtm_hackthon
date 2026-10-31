@@ -11,12 +11,12 @@ export function createProspectSearch({store,provider,readSource,stageIntake,snap
   const start=(id,input)=>{
     if(!uuid(input.requestId)||!Array.isArray(input.productFamilies)||!Array.isArray(input.queries))throw new AppError(400,'Supply a valid request ID and current search plan.','invalid_search_request');
     if(!input.acknowledgedExternalProcessing)throw new AppError(400,'Confirm sending the displayed search queries to Tavily.','external_processing_review_required');
-    const initial=store.read(id);const requestHash=digest({productFamilies:[...input.productFamilies].sort(),queries:input.queries});
+    const initial=store.read(id);const requestHash=digest({productFamilies:[...input.productFamilies].sort(),queries:input.queries,...(input.expansionId?{expansionId:input.expansionId}:{})});
     const previous=(initial.prospectSearches||[]).find(run=>run.id===input.requestId);
     if(previous){if(previous.requestHash!==requestHash)throw new AppError(409,'This request ID belongs to a different search plan.','search_request_conflict');return {id:previous.id,jobId:previous.jobId};}
     if(!initial.approved)throw new AppError(409,'Approve the current customer profile before prospect search.','profile_approval_required');
     if(initial.revision!==input.revision)throw new AppError(409,'Refresh the workspace before sending this search plan.','revision_conflict');
-    let plan;try{plan=buildProspectPlan(initial,input.productFamilies);}catch(error){throw new AppError(400,error.message,'invalid_search_scope');}
+    let plan;try{plan=buildProspectPlan(initial,input.productFamilies,input.expansionId);}catch(error){throw new AppError(400,error.message,'invalid_search_scope');}
     if(JSON.stringify(plan.queries)!==JSON.stringify(input.queries))throw new AppError(409,'The query plan changed. Review the current plan before searching.','search_plan_changed');
     if(initial.jobs.some(job=>job.status==='running'))throw new AppError(409,'Wait for current source research before starting another search.','job_running');
     const capacity=10-(initial.sourceIntakes||[]).filter(intake=>['running','ready'].includes(intake.status)).length;

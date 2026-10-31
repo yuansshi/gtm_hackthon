@@ -1,5 +1,7 @@
 # Hackathon coverage and remaining work
 
+Adjacent segments now support accept/adjust/dismiss review, original-source retention, scoped persisted interpretations and an optional accepted-segment handoff into exact prospect queries. Approval, exclusions, US OEM constraints and quoted account admission remain enforced. Adjusted reasoning is not validated market evidence; autonomous adjacent-market discovery remains incomplete. See [Expansion review](expansion-review.md).
+
 Buyer ICPs now include optional job-title and seniority targets, reviewed local/model proposals, provenance and immutable search/selection context. Contact inspection shows literal title/seniority phrase hints and unknowns without asserting rank, current role or buying authority. Criteria remain local during Hunter requests, and main Hunter stays disabled. See [Buyer personas](buyer-personas.md).
 
 Guided intake now proposes the product description and selected business’s technical capability values, with literal unit/qualification preservation, typed scoped review and a mandatory return to Unconfirmed status for applied capability changes. Product evidence coverage and provenance appear in a disclosure. This closes another Module 1 chat/form handoff gap; supplier specification and engineering qualification remain unverified. See [Product intake](product-intake.md).

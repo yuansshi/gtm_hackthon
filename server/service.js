@@ -2,6 +2,7 @@ import { createBandProvider } from './band-provider.js';
 import { createLeadManagement } from './lead-management.js';
 import {commercialIntakeKey,outreachResearchBrief} from '../src/commercial-planning.js';
 import {intakeFieldValue} from '../src/intake-fields.js';
+import {validExpansionAdjustments} from '../src/expansion-review.js';
 import {capabilityIntakeKey,productDescriptionField} from '../src/product-intake.js';
 import { createBandCoordination } from './band-coordination.js';
 import { checkedMessageBrief, requireMessageBrief, messageBriefInstructions, briefTemplate } from './message-brief.js';
@@ -38,7 +39,7 @@ import { graphContextKey } from '../src/graph-context.js';
 import { communicationStatus, requireCommunicationAllowed, requireAccountCommunication, communicationContext } from './communication-policy.js';
 import { createCommunicationControls } from './communication-controls.js';
 
-export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
+export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions','expansionAdjustments'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
 const findLead = (s, id) => { const lead = s.leads.find(l => l.id === id); if (!lead) throw new AppError(404, 'Account not found in this business.', 'lead_not_found'); return lead; };
 const findDraft = (s, id) => { const d = s.drafts.find(d => d.id === id); if (!d) throw new AppError(404, 'Draft not found in this business.', 'draft_not_found'); return d; };
@@ -99,6 +100,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   const competitorResearch = createCompetitorResearch({ store, graph, competitors, snapshot, readSource: readWebsiteSource });
   const buyingEvidence = createBuyingEvidence({ store, graph, competitors, snapshot, exclusionReason });
   const updateProfile = (s, incoming) => {
+    if(incoming.expansionAdjustments!==undefined&&!validExpansionAdjustments(businessById(s.businessId),incoming.expansionAdjustments))throw new AppError(400,'Adjust only this business’s suggested segments, with a bounded name and research rationale.','invalid_expansion_adjustment');
     const before = profileDigest(s);
     const previousValues = Object.fromEntries(Object.keys(s.assistantFieldProvenance||{}).map(field=>[field,structuredClone(intakeFieldValue(s,field))]));
     const supplierHash = value => digest({ company: value.company, products: value.productFamilies, capabilities: value.capabilities, commercial: value.commercial });

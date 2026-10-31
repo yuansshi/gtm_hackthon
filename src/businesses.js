@@ -2,6 +2,7 @@
 import {commercialPlanningFields} from './commercial-planning.js';
 import {productIntakeFields,capabilityIntakeKey} from './product-intake.js';
 import {personaFields} from './buyer-persona.js';
+import {acceptedExpansions} from './expansion-review.js';
 export const businesses = [
   {
     id: 'huasheng', name: 'Huasheng Castings', initials: 'HS', color: 'blue',
@@ -119,7 +120,7 @@ export function createResearchBrief(state) {
     technicalQualification: 'Requires engineering review for each opportunity',
     productFamilies: b.families.filter(([key]) => state.productFamilies.includes(key)).map(([id, name]) => ({ id, name })),
     capabilities: state.capabilities, commercial: state.commercial, idealCustomerProfile: state.icp,
-    acceptedExpansionSegments: b.expansions.filter(e => state.expansionDecisions[e.id] === 'accepted'),
+    acceptedExpansionSegments: acceptedExpansions(b,state),
     fieldConfidence: profileConfidence(state),
     sources: b.sources,
     caveat: 'Website-stated capabilities are unverified. Blank values are unknown. Research approval does not approve compatibility, pricing, or delivery promises.',

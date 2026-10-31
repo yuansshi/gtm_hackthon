@@ -21,6 +21,7 @@ const profile = z.object({
   icp: z.object({ industries: text, regions: text, segments: strings, roles: strings, motion: z.enum(['', 'replacement', 'oem', 'channel']), exclusions: text,
     naics: text.optional(), headcount: text.optional(), revenue: text.optional(), triggers: text.optional(), referenceWins: text.optional(), excludedDomains: text.optional(),targetTitles:z.string().max(600).optional(),targetSeniority:z.string().max(600).optional() }).strict(),
   expansionDecisions: z.record(z.string().max(100), z.enum(['accepted', 'rejected', 'undecided'])),
+  expansionAdjustments:z.record(z.string().max(100),z.object({name:z.string().trim().min(1).max(120),reason:z.string().trim().min(1).max(600)}).strict()).optional(),
 }).strict();
 const parse = (schema, data) => { const r = schema.safeParse(data); if (!r.success) throw new AppError(400, 'Invalid request: ' + r.error.issues.map(i => `${i.path.join('.')} ${i.message}`).join('; '), 'invalid_request'); return r.data; };
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -153,7 +154,7 @@ export function createApp({ service, store, accessToken = '', secureCookies = fa
   app.post(base + '/approve', (req, res) => { const p = parse(z.object({ acknowledged: z.boolean(), revision }).strict(), req.body); service.approveProfile(req.params.business, p.acknowledged, p.revision); view(req, res); });
   app.post(base + '/discovery', (req, res) => { const j = service.startDiscovery(req.params.business); res.status(202).json({ jobId: j.id }); });
   app.post(base + '/prospect-searches', (req, res) => {
-    const input = parse(z.object({ requestId: z.string().uuid(), revision, productFamilies: z.array(z.string().max(100)).min(1).max(2), queries: z.array(z.string().max(600)).min(1).max(2), acknowledgedExternalProcessing: z.boolean() }).strict(), req.body);
+    const input = parse(z.object({ requestId: z.string().uuid(), revision, productFamilies: z.array(z.string().max(100)).min(1).max(2), queries: z.array(z.string().max(600)).min(1).max(2),expansionId:z.string().min(1).max(100).optional(), acknowledgedExternalProcessing: z.boolean() }).strict(), req.body);
     const run = service.startProspectSearch(req.params.business, input);
     res.status(202).json({ ...service.snapshot(req.params.business), activeProspectSearchId: run.id });
   });

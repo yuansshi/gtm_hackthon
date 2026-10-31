@@ -29,6 +29,8 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 
 ## What is real and what is simulated
 
+Adjacent-segment suggestions support **accept, adjust and dismiss**. Adjustments preserve the original catalog citation and stay labeled as owner research hypotheses. After profile approval, an accepted segment can guide an explicitly reviewed prospect-search query without changing US OEM scope or source-admission requirements. Private rationale stays outside query and outreach payloads. See [Adjacent segment review](docs/expansion-review.md).
+
 The ICP form supports optional **target job titles and seniority**. Reviewed intake can propose them, and new contact searches retain their local target scope. Candidate inspection compares saved phrases with vendor title/seniority text without inferring rank or buying authority; older searches remain Unrecorded. Hunter requests still contain only the account domain or selected address. See [Buyer personas](docs/buyer-personas.md).
 
 Guided intake also proposes a **product description and business-specific capability values** from explicit labels or optional model output. Accept/adjust/dismiss review never confirms a specification: applied capability values return to Unconfirmed, with field provenance and separate technical review. The form’s Product input format shows the selected business’s labels. See [Product and technical intake](docs/product-intake.md).

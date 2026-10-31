@@ -4,6 +4,7 @@ import { missingResearchFields } from './businesses';
 import GuidedIntake, { ConfidencePanel } from './GuidedIntake';
 import {commercialPlanningFields} from './commercial-planning.js';
 import {personaFields} from './buyer-persona.js';
+import ExpansionSuggestions from './ExpansionSuggestions.jsx';
 
 const tabs = [
   { title: 'Company & products', icon: Layers3 },
@@ -25,7 +26,6 @@ export default function ModuleOne({ business, state, change: commitChange, appro
   const toggle = (section, key, item) => update(section, key, state[section][key].includes(item) ? state[section][key].filter(x => x !== item) : [...state[section][key], item]);
   const toggleFamily = id => change(s => ({ ...s, productFamilies: s.productFamilies.includes(id) ? s.productFamilies.filter(f => f !== id) : [...s.productFamilies, id] }));
   const setCapability = (key, property, value) => change(s => ({ ...s, capabilities: { ...s.capabilities, [key]: { ...s.capabilities[key], [property]: value, ...(property === 'value' ? { status: 'unknown' } : {}) } } }));
-  const decideExpansion = (id, decision) => change(s => ({ ...s, expansionDecisions: { ...s.expansionDecisions, [id]: s.expansionDecisions[id] === decision ? 'undecided' : decision } }));
   const productNames = business.families.filter(([id]) => state.productFamilies.includes(id)).map(([, name]) => name);
 
   return <>
@@ -74,11 +74,8 @@ export default function ModuleOne({ business, state, change: commitChange, appro
             <div className="field"><label htmlFor="sales-motion">Primary sales motion</label><select id="sales-motion" value={state.icp.motion} onChange={e => update('icp', 'motion', e.target.value)}><option value="">Select a sales motion</option><option value="replacement">Replacement / maintenance (MRO)</option><option value="oem">New equipment / OEM supply</option><option value="channel">Distributor / channel development</option></select><small>This will shape discovery signals, qualification questions, and the first outreach.</small></div>
             <Field id="exclusions" label="Exclusions & qualification boundaries" value={state.icp.exclusions} onChange={v => update('icp', 'exclusions', v)} multiline />
             <Field id="excluded-domains" label="Exclude company domains" value={state.icp.excludedDomains || ''} onChange={v => update('icp', 'excludedDomains', v)} placeholder="example.com, another-company.com" help="Exact domain exclusions are enforced during research. Narrative qualification boundaries remain review questions." />
-            <div className="form-divider" /><div className="section-heading"><div><h2>Adjacent segments to consider</h2><p>Catalog-based suggestions. Accept or reject each one explicitly.</p></div></div>
-            <div className="expansion-cards">{business.expansions.map(item => {
-              const decision = state.expansionDecisions[item.id];
-              return <article className="expansion-card" key={item.id}><div><h3>{item.name}</h3><p>{item.reason}</p><a className="evidence-link" href={item.source} target="_blank" rel="noreferrer"><BookOpen size={12} />Why this segment was suggested<ExternalLink size={11} /></a></div><div className="expansion-actions"><button type="button" aria-pressed={decision === 'accepted'} aria-label={`Accept ${item.name}`} className={`button ${decision === 'accepted' ? 'primary' : 'secondary'}`} onClick={() => decideExpansion(item.id, 'accepted')}>{decision === 'accepted' ? <Check size={14} /> : <Plus size={14} />}{decision === 'accepted' ? 'Accepted' : 'Accept'}</button><button type="button" aria-pressed={decision === 'rejected'} aria-label={`Reject ${item.name}`} className={`button ${decision === 'rejected' ? 'rejected' : 'secondary'}`} onClick={() => decideExpansion(item.id, 'rejected')}>{decision === 'rejected' ? 'Rejected' : 'Reject'}</button></div></article>;
-            })}</div>
+            <div className="form-divider" /><div className="section-heading"><div><h2>Adjacent segments to consider</h2><p>Catalog-linked research hypotheses. Accept, adjust or dismiss each one, then approve the profile before using it as an optional search target.</p></div></div>
+            <ExpansionSuggestions business={business} state={state} change={change} busy={busy}/>
             <div className="approval-check"><label><input type="checkbox" aria-label="Confirm customer profile review" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} /><span>I reviewed this business’s target products, territories, and buyer profile. Approval authorizes prospect research; compatibility, pricing, and delivery still require review.</span></label></div>
           </>}
         </div>

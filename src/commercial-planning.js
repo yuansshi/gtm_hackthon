@@ -13,5 +13,5 @@ export function withoutCommercialPlan(commercial){
 // Intake/export retain planning inputs; outbound copy needs only the established
 // supplier brief. Never forward the new internal targets through that path.
 export function outreachResearchBrief(brief) {
-  return {...brief,commercial:withoutCommercialPlan(brief.commercial),...(Array.isArray(brief.fieldConfidence)?{fieldConfidence:brief.fieldConfidence.filter(row=>!commercialIntakeFields.includes(row.field))}:{})};
+  return {...brief,commercial:withoutCommercialPlan(brief.commercial),...(Array.isArray(brief.fieldConfidence)?{fieldConfidence:brief.fieldConfidence.filter(row=>!commercialIntakeFields.includes(row.field))}:{}),...(Array.isArray(brief.acceptedExpansionSegments)?{acceptedExpansionSegments:brief.acceptedExpansionSegments.map(item=>item.adjusted?{id:item.id,name:item.name,source:item.source,basis:'Owner-adjusted research target; fit unverified'}:item)}:{})};
 }

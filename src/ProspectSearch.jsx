@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ExternalLink, FileSearch, RefreshCw, Search, X } from 'lucide-react';
 import { businessById } from './businesses.js';
 import { buildProspectPlan } from './prospect-plan.js';
+import {acceptedExpansions} from './expansion-review.js';
 import './prospect-search.css';
 
 const when=value=>new Date(value).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
@@ -16,19 +17,20 @@ export function ProspectSearch({state,act,busy,initialRunId,close,reviewSources,
   const initial=state.prospectSearches?.find(run=>run.id===initialRunId);
   const [families,setFamilies]=useState(initial?.plan.productFamilies||state.productFamilies.slice(0,1));
   const [runId,setRunId]=useState(initialRunId||state.prospectSearches?.[0]?.id||'');
+  const [expansionId,setExpansionId]=useState(initial?.plan.expansion?.id||'');
   const [ack,setAck]=useState(false);const [error,setError]=useState('');
   const run=state.prospectSearches?.find(run=>run.id===runId);
   const running=state.jobs.some(job=>job.status==='running');
   const currentContext=run&&state.approved&&run.profileHash===state.approvedProfileHash;
   const business=businessById(state.businessId);
-  let plan,planError;try{plan=buildProspectPlan(state,families);}catch(failure){planError=failure.message;}
+  let plan,planError;try{plan=buildProspectPlan(state,families,expansionId);}catch(failure){planError=failure.message;}
   const planKey=JSON.stringify(plan);
   useEffect(()=>{dialog.current.showModal();},[]);
   useEffect(()=>{setAck(false);},[planKey,state.approved]);
   const start=async event=>{
     event.preventDefault();if(!plan||!ack||busy||running)return;setError('');
     if(request.current?.key!==planKey)request.current={key:planKey,id:crypto.randomUUID()};
-    const result=await act('/prospect-searches',{requestId:request.current.id,revision:state.revision,productFamilies:plan.productFamilies,queries:plan.queries,acknowledgedExternalProcessing:ack},'POST',true,failure=>setError(failure.message));
+    const result=await act('/prospect-searches',{requestId:request.current.id,revision:state.revision,productFamilies:plan.productFamilies,queries:plan.queries,...(plan.expansion?{expansionId:plan.expansion.id}:{}),acknowledgedExternalProcessing:ack},'POST',true,failure=>setError(failure.message));
     if(result){setRunId(result.activeProspectSearchId);request.current=null;}
   };
   const toggle=family=>{setFamilies(current=>current.includes(family)?current.filter(item=>item!==family):[...current,family]);};
@@ -36,6 +38,7 @@ export function ProspectSearch({state,act,busy,initialRunId,close,reviewSources,
     <header className="ps-heading"><Search size={21}/><div><h2 id="ps-title">Search prospects</h2><p>{state.company.name} · approved US equipment OEM scope</p></div><button className="ar-icon-button" aria-label="Close prospect search" disabled={busy} onClick={close} autoFocus><X size={19}/></button></header>
     {state.prospectSearch?.fixture&&<div className="ps-fixture">Test fixture only · synthetic search responses and source pages</div>}
     <div className="ps-workbench"><form className="ps-plan" onSubmit={start}><h3>Next search plan</h3><p>Choose up to two product families. Each produces one application-focused manufacturer query.</p><fieldset disabled={busy||running}><legend>Approved product families</legend>{business.families.filter(([key])=>state.productFamilies.includes(key)).map(([key,label])=><label className="ps-family" key={key}><input type="checkbox" aria-label={`Search ${label}`} checked={families.includes(key)} disabled={families.length>=2&&!families.includes(key)} onChange={()=>toggle(key)}/><span>{label}</span></label>)}</fieldset>
+      <label className="ps-expansion-label">Adjacent segment · optional<select aria-label="Adjacent segment search target" value={expansionId} disabled={busy||running} onChange={e=>setExpansionId(e.target.value)}><option value="">Current ICP only</option>{expansionId&&!acceptedExpansions(business,state).some(item=>item.id===expansionId)&&<option value={expansionId} disabled>Previously selected segment requires review</option>}{acceptedExpansions(business,state).map(item=><option key={item.id} value={item.id}>{item.name}{item.adjusted?' · owner-adjusted':''}</option>)}</select></label><p className="ps-field-help">Only accepted segments in the approved profile appear here. The selected name is included in the displayed queries; its internal rationale stays local. US OEM scope, product families, exclusions and source review still apply.</p>
       <section className="ps-query-plan" aria-label="Exact queries sent to Tavily"><h4>Exact queries sent to Tavily</h4>{plan?plan.queries.map((query,index)=><p key={query}><span>Query {index+1}</span>{query}</p>):<p className="ps-error">{planError}</p>}</section><p className="ps-field-help">Excluded domains stay local. Supplier identity, capabilities, pricing, contacts, and outcome notes are not sent.</p><div className="ps-cost"><strong>2 local demo credits</strong><span>Up to 2 searches, 3 company domains, and 2 source pages per domain. Tavily charges are separate.</span></div><p className="ps-provider">Tavily: <strong>{state.prospectSearch?.status||'Not configured'}</strong></p>{!state.prospectSearch?.configured&&<p className="ps-field-help">A project Tavily connection is required to run this plan. Direct website intake and collection refresh remain available.</p>}<label className="ps-ack"><input type="checkbox" aria-label="Confirm Tavily query processing" checked={ack} disabled={busy||running||!plan||!state.prospectSearch?.configured} onChange={event=>setAck(event.target.checked)}/><span>Send these displayed queries to Tavily and retrieve the resulting public company pages for source review.</span></label><button type="submit" className="ar-button ar-button-primary" disabled={busy||running||!ack||!plan||!state.prospectSearch?.configured}><Search size={14}/>{running?'Research in progress…':'Run prospect search'}</button><p className="ps-field-help">Source failures do not refund a completed search. No account is admitted or shortlisted automatically.</p>
     </form><section className="ps-results" aria-label="Prospect search results"><div className="ps-results-heading"><h3>Search results</h3>{state.prospectSearches?.length>0&&<label><span className="ar-sr-only">Choose prospect search run</span><select aria-label="Choose prospect search run" value={runId} onChange={event=>setRunId(event.target.value)}>{state.prospectSearches.map(run=><option key={run.id} value={run.id}>{when(run.startedAt)} · {run.status}</option>)}</select></label>}</div>
       {!run&&<div className="ps-empty"><FileSearch size={27}/><h4>Start from the approved ICP</h4><p>Discover company websites, inspect retrieval results, and review exact source quotes before adding an account.</p></div>}
