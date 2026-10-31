@@ -40,7 +40,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | Outreach | Server-enforced approval and local dry run; no email/LinkedIn provider connected |
 | Agents / Band | Local role-based steps; no independently running Band agents, @mentions, tokens, or cost telemetry |
 | Billing / Flexprice | Atomic local demo credit ledger; no external wallet, billing event ingestion, or real charge |
-| Security scans | npm audit run locally; Snyk SAST/SCA workflow prepared but not run without project token/repository |
+| Security scans | npm audit and GitHub verify pass; Snyk workflow stops at the missing project-token check before SAST/SCA |
 
 No RFQ, buying intent, direct buyer email, certification, technical compatibility, price advantage, or delivery commitment is fabricated. A failed refresh preserves its failure status; it does not silently turn cached research into fresh verification.
 
@@ -70,7 +70,9 @@ The GitHub workflow runs checks and Snyk source/dependency scans. Configure a pr
 
 - `src/IndustryApp.jsx`: workspace switching, server hydration, saved profiles, navigation, audit panels.
 - `src/ModuleOne.jsx`, `src/GuidedIntake.jsx`, `src/businesses.js`: intake, evidence coverage, supplier profiles, handoff contract.
-- `src/Workflow.jsx`: discovery, graph inspection, review queue, pipeline, usage UI.
+- `src/Workflow.jsx`: graph inspection and service connections, with re-exports for the account, HITL, and pipeline modules.
+- `src/AccountResearch.jsx`, `src/HITLReview.jsx`, `src/OpportunityPipeline.jsx`: account evidence previews, exact-message review, and Board/List/Analytics.
+- `src/PipelineAnalytics.jsx`, `src/pipeline-metrics.js`: shared cohort calculations, event-mode/window filters, post-contact conversion, and explicit reply linkage.
 - `server/app.js`: typed HTTP boundary, sessions, origin/CSRF controls.
 - `server/service.js`: workflow policy, exact-message approval, metering, history metrics.
 - `server/store.js`, `server/graph.js`: transactional workspace store and native graph projection.
@@ -81,7 +83,7 @@ The GitHub workflow runs checks and Snyk source/dependency scans. Configure a pr
 - `docs/system-design.md`, `docs/rubric-status.md`, `docs/demo-script.md`, `docs/demo-narration.md`: submission preparation and remaining gaps.
 - `src/legacy-demo.jsx`, `src/data.js`: original fictional SaaS fixtures preserved; not used as industrial prospects.
 
-A separate 2:51 desktop walkthrough MP4 and source ZIP are supplied with this update. The video uses actual desktop screenshots and local synthesized narration, states provider limitations, and is not continuous live screen capture.
+The current [public demonstration video](https://youtu.be/lXMJIpLYfAc) is 2:47, with Kokoro Heart narration and English captions. It shows product intake, graph matching, composition, exact-version HITL review, and dashboard synchronization in demo mode. The earlier 2:51 walkthrough transcript remains archived in docs/demo-narration.md.
 
 ## Optional project AI
 
