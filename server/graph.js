@@ -3,13 +3,15 @@ import path from 'node:path';
 import { signalFresh, signalHold } from '../src/market-signals.js';
 import { companyHoldReasons } from '../src/company-evidence.js';
 import { projectedPeople, personDateFresh } from '../src/people-evidence.js';
-import { competitiveReferences } from '../src/competitor-evidence.js';
+import { competitiveReferences, competitorDateFresh } from '../src/competitor-evidence.js';
+import { buyingLinkStatus, buyingWindowActive, publicBuyingEvidence } from '../src/buying-evidence.js';
 
 const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
 const relationships = {
   matched_to: ['Company', 'Product'], works_at: ['Person', 'Company'], signal_for: ['Signal', 'Company'],
   competes_with: ['Product', 'Competitor'], previously_employed_at: ['Person', 'Company'],
   contacted_via: ['Company', 'Signal'], replied_to: ['Person', 'Signal'],
+  supports_evaluation: ['Signal', 'Signal'], concerns_competitor: ['Signal', 'Competitor'],
 };
 
 export async function createGraph(directory) {
@@ -89,6 +91,13 @@ export async function createGraph(directory) {
             }
           }
         }
+        for (const link of state.buyingLinks || []) {
+          const lead = state.leads.find(lead => lead.id === link.leadId);
+          if (buyingLinkStatus(link, state, lead, Date.now(), competitors) !== 'active') continue;
+          const proof = JSON.stringify(publicBuyingEvidence(link));
+          if (link.kind === 'evaluation') await edge('supports_evaluation', prefix + 'market-signal:' + link.jobSignalId, prefix + 'market-signal:' + link.signalId, businessId, proof);
+          else await edge('concerns_competitor', prefix + 'market-signal:' + link.signalId, prefix + 'competitor:' + link.competitorId, businessId, proof);
+        }
         await query('COMMIT');
       } catch (error) { await query('ROLLBACK'); throw error; }
       return await snapshotInternal(businessId);
@@ -103,7 +112,11 @@ export async function createGraph(directory) {
     const edges = [];
     for (const [type, [from, to]] of Object.entries(relationships)) {
       const rows = await query(`MATCH(a:${from})-[r:${type}]->(b:${to}) WHERE a.businessId=$businessId AND b.businessId=$businessId AND r.businessId=$businessId RETURN a.id AS source,b.id AS target,r.evidence AS evidence`, { businessId });
-      edges.push(...rows.map(r => ({ ...r, type })));
+      edges.push(...rows.map(r => {
+        if (!['supports_evaluation', 'concerns_competitor'].includes(type)) return { ...r, type };
+        const proof = JSON.parse(r.evidence);
+        return { ...r, type, evidence: `Owner-linked published window: ${proof.startDate} to ${proof.endDate}. Buying intent and displacement remain unconfirmed.`, buyingEvidence: proof };
+      }));
     }
     return { engine: `Kuzu ${kuzu.VERSION}`, businessId, nodes, edges };
   }
@@ -134,5 +147,13 @@ export async function createGraph(directory) {
     }
     return paths.slice(0, 100);
   });
-  return { sync, snapshot, paths, marketPaths, warmPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
+  const buyingPaths = (id, clock = Date.now()) => serial(async () => {
+    const evaluations = await query('MATCH(j:Signal)-[r:supports_evaluation]->(s:Signal)-[:signal_for]->(c:Company)-[:matched_to]->(p:Product) WHERE j.businessId=$id AND s.businessId=$id AND c.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN j.data AS job,s.data AS signal,c.name AS company,c.data AS account,p.name AS product,r.evidence AS proof ORDER BY j.id,s.id LIMIT 200', { id });
+    const displacements = await query('MATCH(c:Company)<-[:signal_for]-(s:Signal)-[r:concerns_competitor]->(v:Competitor)<-[:competes_with]-(p:Product)<-[:matched_to]-(c) WHERE c.businessId=$id AND s.businessId=$id AND v.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN s.data AS signal,c.name AS company,c.data AS account,v.name AS competitor,v.data AS competitorData,p.name AS product,r.evidence AS proof ORDER BY s.id,v.id LIMIT 200', { id });
+    return {
+      evaluations: evaluations.flatMap(row => { const proof = JSON.parse(row.proof); return buyingWindowActive(proof, clock) && signalFresh(JSON.parse(row.job), clock) && signalFresh(JSON.parse(row.signal), clock) ? [{ ...proof, company: row.company, product: row.product, leadId: JSON.parse(row.account).leadId, interpretation: 'Owner-linked job relevance to a published evaluation window; purchasing intent and causal connection are unconfirmed.' }] : []; }).slice(0, 100),
+      displacements: displacements.flatMap(row => { const proof = JSON.parse(row.proof), review = JSON.parse(row.competitorData).competitiveReview; return buyingWindowActive(proof, clock) && signalFresh(JSON.parse(row.signal), clock) && review?.pages.every(page => competitorDateFresh(page.checkedAt, 24 * 30, clock)) ? [{ ...proof, company: row.company, product: row.product, competitor: row.competitor, leadId: JSON.parse(row.account).leadId, interpretation: 'Published supplier-change context for owner assessment; a replacement opportunity and willingness to switch remain unconfirmed.' }] : []; }).slice(0, 100),
+    };
+  });
+  return { sync, snapshot, paths, marketPaths, warmPaths, buyingPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
 }

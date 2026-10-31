@@ -5,10 +5,11 @@ import { WarmIntroductionPaths } from './PeopleResearch.jsx';
 import { graphContextKey } from './graph-context.js';
 import { CompetitorGraphEvidence } from './CompetitorEvidence.jsx';
 import './knowledge-graph.css';
+import BuyingPaths from './BuyingPaths.jsx';
 
 const types = ['Person', 'Company', 'Product', 'Competitor', 'Signal'];
 const colors = { Product: '#315cba', Company: '#21847d', Person: '#8a61ab', Signal: '#9a5d0a', Competitor: '#667085' };
-const relations = { matched_to: 'Application match', works_at: 'Published role', signal_for: 'Signal for', competes_with: 'Competitive context', previously_employed_at: 'Former employer', contacted_via: 'Outreach record', replied_to: 'Reported reply' };
+const relations = { matched_to: 'Application match', works_at: 'Published role', signal_for: 'Signal for', competes_with: 'Competitive context', previously_employed_at: 'Former employer', contacted_via: 'Outreach record', replied_to: 'Reported reply', supports_evaluation: 'Owner-linked job relevance', concerns_competitor: 'Published supplier-change context' };
 const source = (url, label = 'Primary source') => url ? <a className="source-link" href={url} target="_blank" rel="noreferrer"><BookOpen size={13}/>{label}<ExternalLink size={11}/></a> : <span className="kg-muted">No public source established</span>;
 const description = node => node.data.description || node.data.relevance || node.data.intent || node.data.focus || node.data.role || node.data.industry;
 const date = value => new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -70,15 +71,17 @@ function NodeInspector({ node, graph, select, close, go }) {
 export default function KnowledgeGraph({ state, act, busy, go }) {
   const [snapshot, setSnapshot] = useState(null), [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState(''), [type, setType] = useState('all'), [related, setRelated] = useState(false), [view, setView] = useState('map');
+  const [, tick] = useState(0); const [staleReason, setStaleReason] = useState('');
+  useEffect(() => { if (!snapshot) return; const timer = setInterval(() => tick(value => value + 1), 60000); return () => clearInterval(timer); }, [snapshot]);
   const business = useRef(state.businessId); business.current = state.businessId;
   const contextKey = graphContextKey(state);
   const graph = snapshot && snapshot.businessId === state.businessId && (snapshot.contextKey ? snapshot.contextKey === contextKey : snapshot.contextRevision === state.revision) ? snapshot : null;
-  useEffect(() => { if (snapshot && !graph) { setSnapshot(null); setSelectedId(null); } }, [snapshot, graph]);
-  useEffect(() => { setQuery(''); setType('all'); setRelated(false); setSelectedId(null); }, [state.businessId]);
+  useEffect(() => { if (snapshot && !graph) { setSnapshot(null); setSelectedId(null); setStaleReason('Evidence or its time window changed. Query the graph again for current paths.'); } }, [snapshot, graph]);
+  useEffect(() => { setQuery(''); setType('all'); setRelated(false); setSelectedId(null); setStaleReason(''); }, [state.businessId]);
   const runQuery = async () => {
     const requestedBusiness = state.businessId;
     const result = await act('/graph/query', {}, 'POST', false);
-    if (result && requestedBusiness === business.current) { setSnapshot(result); setSelectedId(null); setRelated(false); }
+    if (result && requestedBusiness === business.current) { setSnapshot(result); setSelectedId(null); setRelated(false); setStaleReason(''); }
   };
   const nodes = graph?.nodes || [], edges = graph?.edges || [];
   const selected = nodes.find(node => node.id === selectedId);
@@ -96,7 +99,8 @@ export default function KnowledgeGraph({ state, act, busy, go }) {
   return <>
     <div className="page-heading"><div><div className="eyebrow">Module 03</div><h1>Knowledge graph</h1><p>Explore the evidence connecting people, accounts, products, and market signals.</p></div><div className="heading-actions"><button disabled={busy} className="button primary" onClick={runQuery}><Network size={15}/>{graph ? 'Refresh graph' : 'Query graph'} · 1 credit</button></div></div>
     <div className="notice"><GitBranch size={18}/><span>Scoped to {state.company.name}. Application matches do not establish buying intent.</span></div>
-    {(state.signalFixture || state.companyFixture || state.peopleFixture || state.competitorFixture) && <div className="notice">Test fixture only · synthetic research evidence</div>}
+    {(state.signalFixture || state.companyFixture || state.peopleFixture || state.competitorFixture || state.buyingFixture) && <div className="notice">Test fixture only · synthetic research evidence</div>}
+    {staleReason && <div className="notice" role="status">{staleReason}</div>}
     {!graph ? <section className="panel workflow-empty"><Compass size={28}/><h2>Explore this business’s relationships</h2><p>Query the graph after discovery, then select a record to inspect its sources and connections.</p></section> : <>
       <section className="panel kg-explorer" aria-label="Graph explorer">
         <div className="kg-toolbar"><label className="kg-search"><Search size={15}/><span className="sr-only">Search graph records</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search records…"/>{query && <button className="icon-button" aria-label="Clear graph search" onClick={() => setQuery('')}><X size={13}/></button>}</label><label className="kg-type-filter"><span>Type</span><select value={type} onChange={event => setType(event.target.value)} aria-label="Graph record type"><option value="all">All types ({nodes.length})</option>{types.map(item => <option key={item} value={item}>{item} ({nodes.filter(node => node.type === item).length})</option>)}</select></label><div className="kg-view-switch" role="group" aria-label="Graph view"><button aria-pressed={view === 'map'} onClick={() => setView('map')}><Network size={14}/>Map</button><button aria-pressed={view === 'records'} onClick={() => setView('records')}><List size={14}/>Records</button></div></div>
@@ -111,6 +115,7 @@ export default function KnowledgeGraph({ state, act, busy, go }) {
         </div>
       </section>
       <section className="panel paths-panel"><div className="section-heading"><div><h2>Buyer paths</h2><p>Published person → company → matched product. Purchasing authority remains unverified.</p></div></div>{graph.paths.length ? graph.paths.map((path, index) => <div className="buyer-path" key={index}><strong>{path.person}</strong><ArrowRight size={15}/><span>{path.company}</span><ArrowRight size={15}/><span>{path.product}</span>{source(path.evidence.source, 'Evidence')}<p>{path.evidence.relevance}</p></div>) : <div className="inline-empty">No source-backed person-to-company path has been established.</div>}</section>
+      <BuyingPaths paths={graph.buyingPaths} go={go}/>
       <WarmIntroductionPaths graph={graph} go={go} fixture={state.peopleFixture}/>
       {graph.marketPaths?.length > 0 && <section className="panel paths-panel"><div className="section-heading"><div><h2>Dated signal paths</h2><p>Signal → company → product. Public event context; buyer evaluation timing remains unconfirmed.</p></div></div>{graph.marketPaths.map((path, index) => <div className="buyer-path" key={index}><strong>{path.signal}</strong><ArrowRight size={15}/><span>{path.company}</span><ArrowRight size={15}/><span>{path.product}</span>{source(path.evidence.source, 'Company publication')}<p>{path.evidence.eventDate}: {path.evidence.quote}</p></div>)}</section>}
     </>}

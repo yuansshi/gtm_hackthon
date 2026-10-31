@@ -74,6 +74,15 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   const view = (req, res) => res.json(service.snapshot(req.params.business));
   app.get(base, view);
+  const buyingDecision = { requestId: z.string().uuid(), revision, acknowledged: z.boolean() };
+  app.post(base + '/leads/:lead/buying-links', async (req, res) => {
+    const input = parse(z.object({ ...buyingDecision, kind: z.enum(['evaluation', 'displacement']), signalId: z.string().uuid(), jobSignalId: z.string().uuid().nullable(), competitorId: z.string().min(1).max(100).nullable(), startDate: z.string().max(10), endDate: z.string().max(10), windowQuote: z.string().max(2000), jobTitle: z.string().max(200), jobQuote: z.string().max(2000) }).strict(), req.body);
+    res.json(await service.reviewBuyingLink(req.params.business, req.params.lead, input));
+  });
+  app.post(base + '/leads/:lead/buying-links/withdraw', async (req, res) => {
+    const input = parse(z.object({ ...buyingDecision, linkId: z.string().uuid() }).strict(), req.body);
+    res.json(await service.withdrawBuyingLink(req.params.business, req.params.lead, input));
+  });
   const competitiveDecision = { requestId: z.string().uuid(), revision, acknowledged: z.boolean() };
   app.post(base + '/competitor-research', (req, res) => {
     const input = parse(z.object({ ...competitiveDecision, referenceId: z.string().min(1).max(100).nullable(), name: z.string().trim().min(1).max(200), category: z.enum(['Direct', 'Indirect', 'Alternative']), sourceUrl: z.string().max(2000), detailUrl: z.string().max(2000).nullable() }).strict(), req.body);

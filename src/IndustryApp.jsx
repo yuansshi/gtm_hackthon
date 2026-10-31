@@ -75,9 +75,18 @@ export default function IndustryApp() {
   useEffect(() => {
     if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running') || state.flexprice?.pendingCount > 0)) return;
     const id = state.businessId; const timer = setInterval(async () => {
-      try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(next); } catch (e) { setConnectionError(e.message); }
+      try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(current => current.businessId === id && next.revision >= current.revision ? next : current); } catch (e) { if (activeBusiness.current === id) setConnectionError(e.message); }
     }, 1500); return () => clearInterval(timer);
   }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns, state.flexprice]);
+  useEffect(() => {
+    if (!connected || dirty || view !== 'graph') return;
+    const id = state.businessId;
+    const timer = setInterval(async () => {
+      try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(current => current.businessId === id && next.revision >= current.revision ? next : current); }
+      catch (error) { if (activeBusiness.current === id) setConnectionError(error.message); }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [connected, dirty, view, state.businessId]);
   const perform = async (task, onError) => {
     const id = state.businessId; setBusy(true);
     try { return await task(id); } catch (e) { setToast(e.message); onError?.(e); return null; } finally { setBusy(false); }

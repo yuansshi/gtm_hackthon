@@ -5,7 +5,8 @@ export const stages = ['Matched', 'Contacted', 'Replied', 'Meeting booked', 'RFQ
 const date = s => s ? new Date(s).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not checked';
 export { Discovery } from './AccountResearch';
 export { Pipeline } from './OpportunityPipeline';
-export { default as KnowledgeGraph } from './KnowledgeGraph';
+const GraphView = React.lazy(() => import('./KnowledgeGraph'));
+export function KnowledgeGraph(props) { return <React.Suspense fallback={<section className="panel workflow-empty">Loading knowledge graph…</section>}><GraphView {...props}/></React.Suspense>; }
 export { Outreach } from './HITLReview';
 
 export function Integrations({ state, go }) {

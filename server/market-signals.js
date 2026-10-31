@@ -84,7 +84,7 @@ export function createMarketSignals({store,graph,competitors,snapshot,profileDig
         if(payload.decision==='accept'){
           scope(state,current);const page=current.signalMonitor?.pages.find(page=>page.url===record.source);
           if(!page||Date.now()-Date.parse(page.checkedAt)>day||Date.parse(page.checkedAt)>Date.now()||!page.text.includes(normalizeText(record.quote))||!payload.dateQuote||!page.text.includes(normalizeText(payload.dateQuote))||!sourceDates(payload.dateQuote).some(date=>date.date===payload.eventDate)||Date.parse(payload.eventDate+'T00:00:00.000Z')>Date.now())throw new AppError(409,'Refresh sources and choose an exact, non-future dated passage from the retained page.','signal_evidence_required');
-          record.eventDate=payload.eventDate;record.dateQuote=payload.dateQuote;record.checkedAt=page.checkedAt;record.sourceHash=page.contentHash;record.acceptedAt=now();record.status='accepted';record.reviewReason=null;
+          record.eventDate=payload.eventDate;record.dateQuote=payload.dateQuote;record.checkedAt=page.checkedAt;record.sourceHash=page.contentHash;record.acceptedAt=now();record.acceptedVersion=randomUUID();record.status='accepted';record.reviewReason=null;
         }else record.status=payload.decision==='withdraw'?'withdrawn':'dismissed';
         record.reviewedAt=now();record.reviewedBy='You';record.reviewNote=payload.note;record.lastReviewHash=requestHash;
         invalidateAccountDrafts(state,leadId,{reason:'market_signal_review_changed'});current.signalGraphStatus='pending';refreshExclusion(state,current);

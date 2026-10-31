@@ -222,3 +222,5 @@ Source-backed competitive comparisons: [Competitor research](docs/competitor-res
 Current competitive-research verification: all 204 tests and the production build pass. Two real public source pages produced literal proposals in an isolated run; no competitive fact or outreach was approved. Desktop fixture QA covers acknowledgement reset, graph citations, source loss/refund, withdrawal and business isolation. Hunter remains disabled at the user’s request.
 
 Snyk status: the owner temporarily disabled its CI job in the current PR. A skipped job is not a completed SAST/SCA scan; project credentials, re-enabling the job and actual passing scans are still outstanding.
+
+Published buying windows: [Buying signals](docs/buying-signals.md) documents account-side job/evaluation and renewal/churn linking, exact source/date review, native active paths and currency controls. These associations never approve messages. The full suite now has 216 passing tests, including 12 buying-evidence tests; the production build passes.

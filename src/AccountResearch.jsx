@@ -98,7 +98,7 @@ export function Discovery({ state, act, busy, go, focusAccountId, onFocusHandled
   const handledView = useRef(null);
   const previousBusiness = useRef(state.businessId);
   const accounts = useMemo(() => (state.leads || []).filter(account => !account.businessId || account.businessId === state.businessId), [state.leads, state.businessId]);
-  const job = state.jobs?.find(item => item.kind !== 'competitor_research');
+  const job = state.jobs?.find(item => !item.kind || item.kind === 'discovery');
   const running = state.jobs?.some(run => run.status === 'running');
   const shortlisted = accounts.filter(account => account.selected && !account.excludedReason);
   const excluded = accounts.filter(account => account.excludedReason);

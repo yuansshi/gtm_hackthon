@@ -4,6 +4,10 @@ import { signalKinds } from '../src/market-signals.js';
 const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const patterns = {
   negative: /\b(?:hiring freeze|freez(?:e|ing) (?:all )?hiring|plant closure|facility closure|closing (?:its |our |the )?(?:plant|factory|facility)|layoffs|laying off)\b/gi,
+  job_requisition: /\b(?:job requisition|requisition id|job id|open position|job opening|hiring (?:a|an))\b/gi,
+  evaluation: /\b(?:RFQ|RFP|request for (?:quotation|proposal|quote)|supplier evaluation (?:window|period)|vendor selection (?:window|period)|procurement tender)\b/gi,
+  renewal: /\b(?:contract|agreement|supplier|vendor)\b[^.!?]{0,60}\b(?:renewal|renew(?:s|ed|ing)?|expires?|expiration)\b/gi,
+  churn: /\b(?:terminat(?:e|ed|ion)|replac(?:e|es|ed|ement))\b[^.!?]{0,60}\b(?:supplier|vendor|contract|agreement)\b|\b(?:supplier|vendor|contract|agreement)\b[^.!?]{0,60}\b(?:termination|replacement|churn)\b/gi,
   leadership: /\b(?:appoint(?:s|ed|ment)?|named|promot(?:ed|es)|recent hire|joins as)\b/gi,
   expansion: /\b(?:expan(?:d(?:s|ed|ing)?|sion)|new (?:manufacturing |production )?(?:plant|factory|facility)|groundbreaking)\b/gi,
   product_launch: /\b(?:launch(?:es|ed)?|introduc(?:es|ed|ing)|unveil(?:s|ed)?)\b/gi,

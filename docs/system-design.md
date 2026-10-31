@@ -177,3 +177,7 @@ Only metadata goes to Flexprice; messages, contact details, source passages and 
 ## Competitive evidence
 
 Business-scoped competitor retrieval shares the pinned public-source reader and store metering gate. Exact passage decisions persist separately from proposals; graph projection can be repaired without repeating a decision or retrieval. Current reviewed source facts can populate native Competitor nodes, while owner comparison notes are excluded from graph fingerprints/facts, model context and outreach. Snapshot age, source change, profile context, withdrawal and supersession limit active support. Details and evidence boundaries: [Competitor research](competitor-research.md).
+
+## Published buying-window reasoning
+
+Reviewed account-owned signals can form fixed native Signal → Signal evaluation links or Signal → Competitor supplier-change links. Source-acceptance versions, business/account context, quoted window dates, source currency, competitor review and qualification holds constrain eligibility. Public edge proof excludes profile/account binding keys. Native traversal rechecks dates and freshness and caps each result set at 100 paths; owner interpretations remain unverified and never authorize outreach. SQLite decisions are retry-safe and projection-repairable. Graph snapshots check time boundaries and read workspace changes each minute without automatically spending graph credits. Details: [Buying signals](buying-signals.md).

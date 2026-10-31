@@ -1,6 +1,7 @@
 export const signalKinds = {
   leadership: 'Leadership appointment', hiring: 'Hiring activity', expansion: 'Facility expansion',
   product_launch: 'Product launch', funding: 'Funding announcement', negative: 'Hiring freeze or closure',
+  job_requisition: 'Published job requisition', evaluation: 'Published procurement evaluation', renewal: 'Supplier renewal notice', churn: 'Supplier change / termination',
 };
 const day = 86400000;
 export function signalFresh(signal, asOf = Date.now()) {
