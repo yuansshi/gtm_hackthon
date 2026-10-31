@@ -23,7 +23,7 @@ const profile = z.object({
 const parse = (schema, data) => { const r = schema.safeParse(data); if (!r.success) throw new AppError(400, 'Invalid request: ' + r.error.issues.map(i => `${i.path.join('.')} ${i.message}`).join('; '), 'invalid_request'); return r.data; };
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-export function createApp({ service, store, accessToken = '', allowedOrigins = ['http://127.0.0.1:3001', 'http://localhost:3001', 'http://127.0.0.1:4173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://localhost:5173'], serveStatic = true }) {
+export function createApp({ service, store, accessToken = '', secureCookies = false, allowedOrigins = ['http://127.0.0.1:3001', 'http://localhost:3001', 'http://127.0.0.1:4173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://localhost:5173'], serveStatic = true }) {
   const app = express();
   app.disable('x-powered-by');
   const sessions = new Map();
@@ -31,6 +31,9 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'" });
     next();
   });
+  // The listener starts only after SQLite and the native graph initialize.
+  // Keep health probes independent of sessions, paid queries and provider calls.
+  app.get('/healthz', (_req, res) => res.set('Cache-Control','no-store').json({ status:'ok' }));
   // SendGrid authenticates this one public endpoint with its raw-byte ECDSA signature.
   app.post('/api/delivery/sendgrid/events', express.raw({ type: 'application/json', limit: '256kb' }), async (req, res, next) => {
     try { res.set('Cache-Control', 'no-store'); res.json(await service.receiveEmailEvents(req.body, req.get('x-twilio-email-event-webhook-signature'), req.get('x-twilio-email-event-webhook-timestamp'))); } catch (error) { next(error); }
@@ -55,7 +58,7 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
     if (sessions.size >= 1000) throw new AppError(429, 'Too many sessions. Try again later.', 'session_limit');
     const id = randomBytes(32).toString('hex'); const csrf = randomBytes(32).toString('hex');
     sessions.set(id, { csrf, expires: Date.now() + 8 * 60 * 60 * 1000 });
-    res.cookie('gtm_session', id, { httpOnly: true, sameSite: 'strict', secure: req.secure, maxAge: 8 * 60 * 60 * 1000 });
+    res.cookie('gtm_session', id, { httpOnly: true, sameSite: 'strict', secure: secureCookies || req.secure, maxAge: 8 * 60 * 60 * 1000 });
     res.json({ csrf, mode: 'demo', delivery: service.deliveryStatus().configured ? 'optional_live_email' : 'dry_run' });
   });
   app.get('/api/status', (req, res) => res.json({ mode: 'demo', graph: 'Kuzu', delivery: service.deliveryStatus().configured ? 'optional_live_email' : 'dry_run', costs, stages: pipelineStages,
