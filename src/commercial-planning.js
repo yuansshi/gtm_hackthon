@@ -5,7 +5,6 @@ export const commercialPlanningFields = [
 ];
 export const commercialIntakeFields=commercialPlanningFields.map(({key})=>'commercial.'+key);
 export const commercialIntakeKey=field=>commercialIntakeFields.includes(field)?field.slice('commercial.'.length):null;
-export const intakeFieldValue=(state,field)=>commercialIntakeKey(field)?state.commercial?.[commercialIntakeKey(field)]:state.icp?.[field];
 export function withoutCommercialPlan(commercial){
   if(!commercial)return commercial;
   const privateKeys=new Set(commercialPlanningFields.map(({key})=>key));

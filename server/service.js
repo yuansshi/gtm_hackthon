@@ -1,6 +1,8 @@
 import { createBandProvider } from './band-provider.js';
 import { createLeadManagement } from './lead-management.js';
-import {commercialIntakeKey,intakeFieldValue,outreachResearchBrief} from '../src/commercial-planning.js';
+import {commercialIntakeKey,outreachResearchBrief} from '../src/commercial-planning.js';
+import {intakeFieldValue} from '../src/intake-fields.js';
+import {capabilityIntakeKey,productDescriptionField} from '../src/product-intake.js';
 import { createBandCoordination } from './band-coordination.js';
 import { checkedMessageBrief, requireMessageBrief, messageBriefInstructions, briefTemplate } from './message-brief.js';
 import { randomUUID } from 'node:crypto';
@@ -152,7 +154,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const { initial, run } = started;
     let generated;
     try {
-      generated = mode === 'local' ? { value: localIntake(message), metadata: { provider: 'Local rules', usage: null } } : await model.intake({ message, profile: createResearchBrief(initial), sources: businessById(id).sources, requestId });
+      generated = mode === 'local' ? { value: localIntake(message,id), metadata: { provider: 'Local rules', usage: null } } : await model.intake({ message, profile: createResearchBrief(initial), sources: businessById(id).sources, requestId });
       finishAssistant(id, run, generated.value, generated.metadata);
       return { ...snapshot(id), activeAssistantRunId: run.id };
     } catch (error) { error.providerUsage ||= generated?.metadata?.usage; failAssistant(id, run, error); throw error; }
@@ -164,18 +166,23 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       if (!run || run.status !== 'completed') throw new AppError(404, 'Completed intake proposal not found in this business.', 'proposal_not_found');
       if (run.reviewedAt) throw new AppError(409, 'This proposal has already been reviewed.', 'proposal_already_reviewed');
       if (profileDigest(s) !== run.profileHash) throw new AppError(409, 'The profile changed. Request a new proposal before applying suggestions.', 'stale_assistant_context');
-      const fields = new Set(); const icp = { ...s.icp }; const commercial={...s.commercial}; const accepted = [];
+      const fields = new Set(); const icp = { ...s.icp }; const commercial={...s.commercial}; const company={...s.company}; const capabilities=structuredClone(s.capabilities); const accepted = [];
       for (const d of decisions) {
         const suggestion = run.result.suggestions.find(p => p.field === d.field);
         if (!suggestion || fields.has(d.field)) throw new AppError(400, 'Review only unique fields from this proposal.', 'invalid_proposal_field');
         fields.add(d.field);
         if (d.decision === 'dismissed') continue;
         const value = d.decision === 'accepted' ? suggestion.value : d.value;
-        if (!validIntakeValue(d.field, value)) throw new AppError(400, 'An adjusted field has an invalid value.', 'invalid_proposal_value');
-        const key=commercialIntakeKey(d.field);if(key)commercial[key]=value;else icp[d.field] = value; accepted.push({ ...suggestion, value, decision: d.decision });
+        if (!validIntakeValue(d.field, value,id)) throw new AppError(400, 'An adjusted field has an invalid value.', 'invalid_proposal_value');
+        const key=commercialIntakeKey(d.field),capability=capabilityIntakeKey(d.field);
+        if(key)commercial[key]=value;
+        else if(d.field===productDescriptionField)company.description=value;
+        else if(capability)capabilities[capability]={value,status:'unknown'};
+        else icp[d.field] = value;
+        accepted.push({ ...suggestion, value, decision: d.decision });
       }
       if (fields.size !== run.result.suggestions.length) throw new AppError(400, 'Accept, adjust, or dismiss every suggested field.', 'incomplete_proposal_review');
-      updateProfile(s, { icp,commercial }); s.assistantFieldProvenance ||= {};
+      updateProfile(s, { icp,commercial,company,capabilities }); s.assistantFieldProvenance ||= {};
       for (const field of accepted) s.assistantFieldProvenance[field.field] = { ...field, confidence: field.decision === 'adjusted' ? 1 : field.confidence, basis: field.decision === 'adjusted' ? 'Owner-adjusted target' : field.basis, method: run.mode === 'model' ? 'Uncalibrated model suggestion reviewed by owner' : 'Explicit local extraction reviewed by owner', runId, reviewedAt: now() };
       run.decisions = decisions; run.reviewedAt = now(); run.acceptedFields = accepted.map(f => f.field);
       addActivity(s, 'ICP suggestions reviewed', `${accepted.length} accepted or adjusted; ${decisions.length - accepted.length} dismissed. Any profile changes revoke prior research and unsent-message approvals.`, 'You');

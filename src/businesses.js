@@ -1,5 +1,6 @@
 // Public website statements are starting evidence, not verified manufacturing limits.
 import {commercialPlanningFields} from './commercial-planning.js';
+import {productIntakeFields,capabilityIntakeKey} from './product-intake.js';
 export const businesses = [
   {
     id: 'huasheng', name: 'Huasheng Castings', initials: 'HS', color: 'blue',
@@ -137,6 +138,11 @@ export function profileConfidence(state) {
     ['revenue', state.icp.revenue, 'Owner-defined target; account revenue unverified'],
     ['triggers', state.icp.triggers, 'Owner-defined research signal'],
     ...commercialPlanningFields.map(({key,label})=>['commercial.'+key,state.commercial?.[key],'Owner-supplied internal plan; not a quote',label]),
+    ...productIntakeFields(businessById(state.businessId)).map(({field,label})=>{
+      const key=capabilityIntakeKey(field),capability=key?state.capabilities?.[key]:null;
+      const basis=!key?'Product statement; supplier verification required':capability?.status==='reviewed'?'Internally reviewed; application qualification separate':capability?.status==='website'?'Website statement; supplier verification required':'Owner-supplied technical statement; qualification unverified';
+      return[field,key?capability?.value:state.company?.description,basis,label];
+    }),
   ].map(([field, value, basis,label]) => {
     const provenance = state.assistantFieldProvenance?.[field];
     if (provenance && JSON.stringify(provenance.value) === JSON.stringify(value)) return { field, ...(label?{label}:{}), value, confidence: provenance.confidence, basis: { user_input: 'Campaign owner input', catalog_hypothesis: 'Catalog hypothesis, reviewed as a target' }[provenance.basis] || provenance.basis, evidence: provenance.evidence, method: provenance.method, runId: provenance.runId, reviewedAt: provenance.reviewedAt };

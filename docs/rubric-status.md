@@ -1,5 +1,7 @@
 # Hackathon coverage and remaining work
 
+Guided intake now proposes the product description and selected business’s technical capability values, with literal unit/qualification preservation, typed scoped review and a mandatory return to Unconfirmed status for applied capability changes. Product evidence coverage and provenance appear in a disclosure. This closes another Module 1 chat/form handoff gap; supplier specification and engineering qualification remain unverified. See [Product intake](product-intake.md).
+
 Module 1 now includes optional owner-supplied monetization model, pricing framework and target contract value, with literal labeled extraction, typed accept/adjust/dismiss review and provenance. These internal targets stay outside outbound draft-model payloads, Band packets, search plans and native graph facts. Existing profile hashes remain compatible. This closes an intake-format gap; customer pricing and unit economics remain unvalidated. See [Commercial planning](commercial-planning.md).
 
 Source: [AI GTM Engine hackathon brief](https://docs.google.com/document/d/1JMdBeOzpCk7towtxNF_29RgdzFSAb83U-HJ2W1f7f88/edit?tab=t.0), reviewed October 30, 2026. This is a paraphrased implementation checklist, not a prediction of the judges' score.

@@ -12,7 +12,9 @@ const moduleAt = name => import(pathToFileURL(path.resolve('server',name)).href)
 const leadId = 'deployment-fixture';
 // Synthetic owner inputs, never supplier prices or verified contract economics.
 const commercialPlan = {monetizationModel:'Synthetic manufacturing per order',pricingFramework:'Synthetic quote after drawing review',targetContractValue:'USD 25,000–50,000 per synthetic order'};
-const assertCommercialPlan = state => {for(const [key,value] of Object.entries(commercialPlan))assert.equal(state.commercial[key],value);};
+const productDescription='Synthetic custom hydraulic cylinders, subject to application review';
+const pressureStatement='Synthetic 250 bar target, seal and duty-cycle review pending';
+const assertCommercialPlan = state => {for(const [key,value] of Object.entries(commercialPlan))assert.equal(state.commercial[key],value);assert.equal(state.company.description,productDescription);assert.deepEqual(state.capabilities.pressure,{value:pressureStatement,status:'unknown'});};
 
 if (phase === 'seed') {
   const {createStore} = await moduleAt('store.js');
@@ -82,7 +84,7 @@ if (phase === 'seed') {
   let state=await json('/api/businesses/allco');assert.equal(state.signalFixture,true,'Refuse to mutate a non-fixture workspace.');assert.equal(state.leads[0].id,leadId);
   if(phase==='exercise') {
     assert.equal(state.wallet.credits,100);assert.equal(state.drafts.length,0);
-    state=await json('/api/businesses/allco/assistant/intake','POST',{message:`Target United States OEMs with 50-500 employees.\nMonetization model: ${commercialPlan.monetizationModel}\nPricing framework: ${commercialPlan.pricingFramework}\nTarget contract value: ${commercialPlan.targetContractValue}`,mode:'local',requestId:randomUUID(),acknowledgedExternalProcessing:false,revision:state.revision});
+    state=await json('/api/businesses/allco/assistant/intake','POST',{message:`Target United States OEMs with 50-500 employees.\nProduct description: ${productDescription}\nRated working pressure: ${pressureStatement}\nMonetization model: ${commercialPlan.monetizationModel}\nPricing framework: ${commercialPlan.pricingFramework}\nTarget contract value: ${commercialPlan.targetContractValue}`,mode:'local',requestId:randomUUID(),acknowledgedExternalProcessing:false,revision:state.revision});
     const run=state.assistantRuns.find(r=>r.id===state.activeAssistantRunId);assert.ok(run.result.suggestions.length>0);
     state=await json(`/api/businesses/allco/assistant/intake/${run.id}/review`,'POST',{revision:state.revision,acknowledged:true,decisions:run.result.suggestions.map(s=>({field:s.field,decision:'accepted'}))});
     assert.match(state.icp.regions,/United States/);assert.ok(state.icp.segments.some(s=>/OEM|manufacturer/i.test(s)));
