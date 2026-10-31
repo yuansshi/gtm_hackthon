@@ -81,7 +81,7 @@ Snyk: CI configuration includes SCA and SAST without ignoring failures. Missing 
 
 The Node server serves built assets and `/api` on one origin. A non-loopback bind requires a project token and configured origin. Source URLs are fixed to allowlisted HTTPS hosts; redirects are revalidated, private resolutions blocked, response sizes capped, and fetches time limited. This is a bounded research tool, not a general URL fetch proxy. DNS preflight is not a full egress sandbox; enforce public-only network egress for production.
 
-No externally hosted deployment, public source repository, Snyk scan result, live-verified model/search/enrichment, verified email, sent outreach, Band connection, or Flexprice connection is claimed. Docker deployment is prepared but untested locally. The archived native Kuzu dependency is a production maintenance risk and should be replaced/evaluated before broad deployment.
+Source is published at [yuansshi/gtm_hackthon](https://github.com/yuansshi/gtm_hackthon); the desktop/analytics update is in PR #2. The [public demonstration](https://youtu.be/lXMJIpLYfAc) uses local extraction, source templates, and dry-run outreach. No externally hosted deployment, passing Snyk scan, live-verified model/search/enrichment, verified email, sent outreach, Band connection, or Flexprice connection is claimed. Docker deployment is prepared but untested locally. The archived native Kuzu dependency is a production maintenance risk and should be replaced/evaluated before broad deployment.
 
 
 ## Credit reloads
@@ -89,3 +89,10 @@ No externally hosted deployment, public source repository, Snyk scan result, liv
 The billing page presents the active workspace wallet, server-defined packs, custom amounts, usage rates, filterable history, and persisted reload receipts. SQLite atomically records the request ID, grant, receipt, and before/after balances. Replaying a completed ID returns its original receipt; changing its pack or amount is rejected. Custom amounts and the maximum wallet balance are enforced before a grant. Reloads do not grant research/message approval. Workspace reset retains the wallet and billing receipts.
 
 The current implementation adds demo credits without payment and is labeled accordingly. No card or real payment information is accepted. The legacy grant endpoint uses the same validation. Real billing requires verified checkout/webhook fulfillment, project customer mapping, and individual user/tenant authorization.
+
+
+## Dashboard cohorts and attribution
+
+Board, List, and Analytics share the same selected account population. Analytics then filters event and outbound-record timestamps and attribution type. Each conversion uses distinct account IDs from a common recorded-contact cohort; outcomes must follow a matching contact. Incomplete histories remain visible in raw milestone counts. A zero denominator is unavailable. Simulated and provider-accepted outbound records are separate, and acceptance is not inbox delivery.
+
+Variant observations require an explicit same-account reply-to-draft reference and chronological order; manual stage updates are not silently assigned to prior messages. Channels, sequence steps, drafting methods, and delivery modes remain separate. The current application has no provider reply feed or UI for entering linked reply events. Detailed definitions and validation are in [Pipeline analytics](pipeline-analytics.md).

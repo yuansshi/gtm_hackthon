@@ -6,6 +6,7 @@ import { checkMx, reviewCandidate } from './evidence.js';
 import { createModelProvider } from './model.js';
 import { localIntake, validIntakeValue } from './intake.js';
 import { billingSummary } from './billing.js';
+import { analyzePipeline } from '../src/pipeline-metrics.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
@@ -21,7 +22,7 @@ export function exclusionReason(lead, state) {
 }
 const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
 
-export function metrics(state) {
+export function metrics(state, { asOf } = {}) {
   const reached = stage => state.leads.filter(l => l.events.some(e => e.stage === stage)).length;
   const contacted = reached('Contacted'); const replied = reached('Replied'); const meetings = reached('Meeting booked');
   const groups = new Map();
@@ -29,19 +30,21 @@ export function metrics(state) {
     const key = `${l.industry}|${l.fit.tier}`; const group = groups.get(key) || { industry: l.industry, tier: l.fit.tier, total: 0, contacted: 0, replied: 0, meetings: 0 };
     group.total++; if (l.events.some(e => e.stage === 'Contacted')) group.contacted++; if (l.events.some(e => e.stage === 'Replied')) group.replied++; if (l.events.some(e => e.stage === 'Meeting booked')) group.meetings++; groups.set(key, group);
   }
+  const analytics = analyzePipeline(state, { asOf });
   const experiments = ['A', 'B'].map(variant => {
-    const sent = state.drafts.filter(d => d.variant === variant && ['simulated', 'accepted'].includes(d.status));
-    const recipients = [...new Set(sent.map(d => d.leadId))];
-    const responses = recipients.filter(id => { const first = sent.filter(d => d.leadId === id).map(d => d.sentAt).sort()[0]; return state.leads.find(l => l.id === id)?.events.some(e => e.stage === 'Replied' && e.at >= first); }).length;
-    return { variant, sent: sent.length, recipients: recipients.length, responses, replyRate: recipients.length ? responses / recipients.length : null };
+    const groups = analytics.experiments.filter(group => group.variant === variant);
+    const drafts = [...new Map(state.drafts.filter(draft => groups.some(group => group.draftIds.includes(draft.id))).map(draft => [draft.id, draft])).values()];
+    const recipients = new Set(drafts.map(draft => draft.leadId));
+    const linkedReplies = new Set(analytics.records.filter(record => record.events.some(event => event.stage === 'Replied' && drafts.some(draft => draft.id === event.draftId && draft.leadId === record.id && Date.parse(event.at) >= Date.parse(draft.sentAt)))).map(record => record.id));
+    return { variant, sent: drafts.length, recipients: recipients.size, responses: linkedReplies.size, replyRate: recipients.size ? linkedReplies.size / recipients.size : null, attribution: 'Explicit same-account draft link only' };
   });
   return { accounts: state.leads.length, selected: state.leads.filter(l => l.selected).length, contacted, replied, meetings,
     qualifiedRfqs: reached('RFQ received'), quotes: reached('Quote sent'), won: reached('Closed won'),
-    replyRate: contacted ? replied / contacted : null, meetingRate: contacted ? meetings / contacted : null,
+    replyRate: analytics.reach.find(row => row.stage === 'Replied').rate, meetingRate: analytics.reach.find(row => row.stage === 'Meeting booked').rate,
     liveAccepted: state.drafts.filter(d => d.status === 'accepted').length, simulated: state.drafts.filter(d => d.status === 'simulated').length,
     stages: pipelineStages.map(stage => ({ stage, current: state.leads.filter(l => l.stage === stage).length, reached: reached(stage) })),
     segments: [...groups.values()], experiments,
-    caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. A/B comparisons are descriptive, not causal.' };
+    caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. Conversion rates use the same recorded-contact cohort and require outcomes after contact. A/B comparisons require explicit reply-to-draft links and are descriptive, not causal.' };
 }
 
 export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider() }) {

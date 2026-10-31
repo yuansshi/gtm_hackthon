@@ -110,3 +110,10 @@ The signed-in project user can open **Billing & credits** and reload the active 
 Repeated requests with the same reload ID return the same receipt and cannot grant credits twice. Amounts and packs are validated on the server; clients cannot post a new balance or a different workspace identity. Usage, reloads, reservations and refunds can be reviewed separately. An insufficient balance blocks metered work; reloading restores availability. Profile/campaign reset preserves the wallet and receipts.
 
 **This is demo billing. No card details, real payment, price, tax invoice or Flexprice charge is collected.** A production payment flow must replace free demo grants with verified provider checkout/webhook fulfillment and real user/tenant authorization. The shared-project demo token is not a multi-user billing identity. The old fixed `/credits` grant now requires the same validated reload request as `/billing/reloads`.
+
+
+### Pipeline analytics
+
+Open **Pipeline → Analytics**. Industry, tier, stage, summary, and search filters select the same accounts across Board, List, and Analytics. Use an activity window and type to separate dry runs, user-reported events, and provider activity. Click a milestone to inspect its supporting accounts and source evidence.
+
+Conversion rates use a shared recorded-contact cohort and outcomes after contact, while raw milestones retain incomplete histories. Sequence observations split channel, A/B variant, step, drafting method, and mode; a reply is attributed only with an explicit same-account draft reference. No provider reply feed is connected, and existing manual stage edits are unattributed. See [metric definitions and validation](docs/pipeline-analytics.md).
