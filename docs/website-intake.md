@@ -25,7 +25,7 @@ This expands the collection without treating a user-entered URL or search snippe
 - Review validates source membership, exact quote coverage, product-family ownership, geography/OEM/domain exclusions, and account deduplication before admission. New records retain unknown people and contact verification unless a published address is explicitly selected from the fetched source.
 - Accepted custom candidates remain in the business’s collection and participate in source refresh. A missing or changed quote blocks qualification until reviewed again, while preserving historical stages and sent receipts.
 
-Open-ended search-provider discovery remains unconnected. The optional Hunter contact adapter is a separate workflow and requires a project key for live verification. This source-review flow is the admission path those results can use later; it does not claim those integrations are connected.
+Optional ICP-driven Tavily search stages successfully fetched pages into this review queue. Search-origin intakes retain the parent run/candidate lineage and shared reservation; review adds no second charge. Admission links the account to the parent research ledger without allocating the whole run cost to every account. The optional Hunter contact adapter is a separate workflow. Both adapters require designated project keys for live verification; intercepted fixtures do not establish live success.
 
 
 ## Verification

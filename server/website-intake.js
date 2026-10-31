@@ -31,6 +31,15 @@ export async function reviewWebsiteCandidate(candidate, state, readSource = read
 
 export function createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource = readPublicSource }) {
   const findIntake = (state, intakeId) => { const intake = (state.sourceIntakes || []).find(intake => intake.id === intakeId); if (!intake) throw new AppError(404, 'Website intake not found in this business.', 'intake_not_found'); return intake; };
+  // Internal staging only: API callers cannot supply fetched pages or grant source authority.
+  const stageSearchIntake = (state, { id, jobId, pages, sourceSearchRunId, searchCandidateId, reservation, profileHash }) => {
+    if (!state.approved || profileDigest(state) !== profileHash || !pages.length || pages.length > 2) throw new AppError(409, 'The approved search context changed.', 'stale_research');
+    const urls = pages.map(page => publicSourceUrl(page.url).href); const site = sourceSite(urls[0]);
+    if (pages.some(page => page.fetchStatus !== 'reachable' || typeof page.text !== 'string' || page.text.length < 30 || page.text.length > 48000)) throw new AppError(400, 'Search results require readable fetched sources.', 'invalid_search_sources');
+    urls.forEach(url => publicSourceUrl(url, site));
+    const intake = { id, jobId, businessId: state.businessId, site, urls, requestHash: digest({ urls }), profileHash, status: 'ready', startedAt: now(), completedAt: now(), reservation, pages, sourceSearchRunId, searchCandidateId, origin: 'prospect_search' };
+    state.sourceIntakes ||= []; state.sourceIntakes.unshift(intake); return intake;
+  };
   const start = (id, input) => {
     if (!validRequestId(input?.requestId) || !Array.isArray(input.urls) || !input.urls.length || input.urls.length > 2) throw new AppError(400, 'Supply one or two company pages and a valid request ID.', 'invalid_source_intake');
     const urls = [...new Set(input.urls.map(value => publicSourceUrl(value).href))]; const site = sourceSite(urls[0]);
@@ -96,7 +105,7 @@ export function createWebsiteIntake({ store, graph, competitors, snapshot, profi
       if (publicEmail && !intake.pages.some(page => page.emails.includes(publicEmail))) throw new AppError(400, 'Select an address actually published in a fetched page, or leave it unknown.', 'unpublished_contact');
       const existing = initial.leads.find(lead => lead.domain.replace(/^www\./, '') === intake.site);
       if (existing && !existing.customEvidence) throw new AppError(409, 'This company already exists in the researched collection.', 'account_exists');
-      const candidate = { id: existing?.id || `web-${randomUUID()}`, name: values.name, domain: intake.site, country: values.country, location: values.location, industry: values.industry, tier: 'OEM', application: values.application, reason: values.reason, businesses: [id], productFamily: values.productFamily, source: quotes.application.url, contactSource: quotes.geography.url, publicEmail, people: [], customEvidence: true, evidenceNeedsReview: false, sourceEvidenceState: 'quote_present', evidenceQuotes: quotes, factEvidence: [quotes.organization, quotes.geography, quotes.application], facts: [quotes.organization.text, quotes.geography.text, quotes.application.text], signal: { title: 'Owner-reviewed application evidence', kind: 'Application', intent: 'Application hypothesis only; no buying cycle or supplier opening verified', source: quotes.application.url }, sourceIntakeId: intake.id, evidenceReviewedAt: now() };
+      const candidate = { id: existing?.id || `web-${randomUUID()}`, name: values.name, domain: intake.site, country: values.country, location: values.location, industry: values.industry, tier: 'OEM', application: values.application, reason: values.reason, businesses: [id], productFamily: values.productFamily, source: quotes.application.url, contactSource: quotes.geography.url, publicEmail, people: [], customEvidence: true, evidenceNeedsReview: false, sourceEvidenceState: 'quote_present', evidenceQuotes: quotes, factEvidence: [quotes.organization, quotes.geography, quotes.application], facts: [quotes.organization.text, quotes.geography.text, quotes.application.text], signal: { title: 'Owner-reviewed application evidence', kind: 'Application', intent: 'Application hypothesis only; no buying cycle or supplier opening verified', source: quotes.application.url }, sourceIntakeId: intake.id, sourceSearchRunId: intake.sourceSearchRunId || null, discoveryCandidateId: intake.searchCandidateId || null, discoveryMethod: intake.sourceSearchRunId ? 'tavily_source_review' : 'website_source_review', evidenceReviewedAt: now() };
       const exclusion = exclusionReason(candidate, initial); if (exclusion) throw new AppError(409, exclusion, 'account_excluded');
       const lead = { ...candidate, businessId: id, fit: scoreAccount(candidate, initial), stage: 'Matched', selected: false, sourceReviews: intake.pages.map(sourceRecord), researchedAt: now(), evidenceStatus: 'Owner-reviewed primary-source quotes', owner: 'You', contact: { email: publicEmail, emailKind: publicEmail ? 'Published address selected by reviewer' : 'No public email established', source: publicEmail ? intake.pages.find(page => page.emails.includes(publicEmail)).url : candidate.contactSource, mxStatus: 'not_checked', mailboxStatus: 'unverified', linkedIn: null, roleMatch: 'Named buying responsibility unverified' }, events: [{ stage: 'Matched', at: now(), actor: 'You', mode: 'research' }] };
       store.mutate(id, state => {
@@ -106,7 +115,7 @@ export function createWebsiteIntake({ store, graph, competitors, snapshot, profi
         else state.leads.push(lead);
         state.customCandidates ||= []; state.customCandidates = [...state.customCandidates.filter(item => item.domain !== candidate.domain), candidate];
         current.status = 'accepted'; current.leadId = lead.id; current.reviewHash = reviewHash; current.review = { ...values, quotes, publicEmail }; current.reviewedAt = now(); current.graphStatus = 'pending';
-        const entry = state.wallet.ledger.find(entry => entry.id === current.reservation); if (entry) entry.leadId = lead.id;
+        const entry = state.wallet.ledger.find(entry => entry.id === current.reservation); if (entry) { if (current.sourceSearchRunId) entry.researchLeadIds = [...new Set([...(entry.researchLeadIds || []), lead.id])]; else entry.leadId = lead.id; }
         addActivity(state, existing ? 'Website account evidence updated' : 'Website account admitted', `${candidate.name}; exact primary-source quotes reviewed by you. Not shortlisted; buyer authority and intent remain unverified.`, 'You', { leadId: lead.id, sourceIntakeId: intakeId });
       });
     }
@@ -118,5 +127,5 @@ export function createWebsiteIntake({ store, graph, competitors, snapshot, profi
     store.mutate(id, state => { const intake = findIntake(state, intakeId); if (!['ready', 'failed', 'dismissed'].includes(intake.status)) throw new AppError(409, 'Wait for source work to finish; accepted records stay in the account collection.', 'intake_not_dismissible'); if (intake.status !== 'dismissed') { intake.status = 'dismissed'; intake.dismissedAt = now(); addActivity(state, 'Website intake dismissed', `${intake.site}; no account was added. Completed source work is not refunded.`, 'You'); } });
     return snapshot(id);
   };
-  return { start, review, dismiss };
+  return { start, review, dismiss, stageSearchIntake };
 }

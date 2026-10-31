@@ -12,6 +12,9 @@ import { createWebsiteIntake, reviewWebsiteCandidate, markWebsiteProjection } fr
 import { readPublicSource } from './public-source.js';
 import { invalidateAccountDrafts, suppressedContact } from './review-policy.js';
 import { createHunterProvider } from './hunter.js';
+import { createProspectSearchProvider } from './prospect-search-provider.js';
+import { createProspectSearch } from './prospect-search.js';
+import { excludedDomains, matchesExcludedDomain } from '../src/prospect-plan.js';
 import { createContactEnrichment, mergeAccountPeople, markContactProjection } from './contact-enrichment.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
@@ -23,8 +26,8 @@ export function exclusionReason(lead, state) {
   if (!/united states|\busa?\b/i.test(state.icp.regions) || lead.country !== 'United States') return 'Outside the currently supported US research collection.';
   if (!state.icp.segments.some(s => /OEM|manufacturer/i.test(s))) return 'The current research collection supports equipment OEM campaigns only.';
   if (!state.productFamilies.includes(lead.productFamily)) return 'Relevant product family is not selected in this campaign.';
-  const domains = (state.icp.excludedDomains || '').split(/[\s,;]+/).map(d => d.toLowerCase().replace(/^www\./, '')).filter(Boolean);
-  if (domains.includes(lead.domain.replace(/^www\./, ''))) return 'Excluded company domain in customer profile.';
+  const domains = excludedDomains(state.icp.excludedDomains);
+  if (matchesExcludedDomain(lead.domain.toLowerCase().replace(/^www\./, ''), domains)) return 'Excluded company domain in customer profile.';
   return null;
 }
 const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
@@ -55,9 +58,10 @@ export function metrics(state, { asOf } = {}) {
     caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. Conversion rates use the same recorded-contact cohort and require outcomes after contact. A/B comparisons require explicit reply-to-draft links and are descriptive, not causal.' };
 }
 
-export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource, hunter = createHunterProvider() }) {
-  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource, hunter = createHunterProvider(), prospectProvider = createProspectSearchProvider() }) {
+  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), prospectSearch: prospectProvider.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
   const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
+  const prospectSearch = createProspectSearch({ store, provider: prospectProvider, readSource: readWebsiteSource, stageIntake: websiteIntake.stageSearchIntake, snapshot, profileDigest });
   const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible });
   const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
   const updateProfile = (s, incoming) => {
@@ -324,5 +328,5 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
+  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
 }

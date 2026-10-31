@@ -54,8 +54,8 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
     res.json({ csrf, mode: 'demo', delivery: 'dry_run' });
   });
   app.get('/api/status', (req, res) => res.json({ mode: 'demo', graph: 'Kuzu', delivery: 'dry_run', costs, stages: pipelineStages,
-    assistant: service.assistantStatus(), enrichment: service.enrichmentStatus(),
-    integrations: ['Band Desktop', 'Flexprice', 'LLM', 'Enrichment vendor', 'Email / LinkedIn delivery'].map(name => name === 'Enrichment vendor' ? { ...service.enrichmentStatus(), name: 'Hunter', connected: !!service.enrichmentStatus().verifiedAt } : name === 'LLM' ? { ...service.assistantStatus(), name, connected: !!service.assistantStatus().verifiedAt } : { name, connected: false, status: 'Not connected' }) }));
+    assistant: service.assistantStatus(), enrichment: service.enrichmentStatus(), prospectSearch: service.prospectSearchStatus(),
+    integrations: ['Band Desktop', 'Flexprice', 'LLM', 'Enrichment vendor', 'Prospect search', 'Email / LinkedIn delivery'].map(name => name === 'Prospect search' ? { ...service.prospectSearchStatus(), name: 'Tavily', connected: !!service.prospectSearchStatus().verifiedAt } : name === 'Enrichment vendor' ? { ...service.enrichmentStatus(), name: 'Hunter', connected: !!service.enrichmentStatus().verifiedAt } : name === 'LLM' ? { ...service.assistantStatus(), name, connected: !!service.assistantStatus().verifiedAt } : { name, connected: false, status: 'Not connected' }) }));
   app.param('business', (req, res, next, id) => { try { assertBusiness(id); next(); } catch (e) { next(e); } });
   const base = '/api/businesses/:business';
   const view = (req, res) => res.json(service.snapshot(req.params.business));
@@ -82,6 +82,11 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   app.post(base + '/approve', (req, res) => { const p = parse(z.object({ acknowledged: z.boolean(), revision }).strict(), req.body); service.approveProfile(req.params.business, p.acknowledged, p.revision); view(req, res); });
   app.post(base + '/discovery', (req, res) => { const j = service.startDiscovery(req.params.business); res.status(202).json({ jobId: j.id }); });
+  app.post(base + '/prospect-searches', (req, res) => {
+    const input = parse(z.object({ requestId: z.string().uuid(), revision, productFamilies: z.array(z.string().max(100)).min(1).max(2), queries: z.array(z.string().max(600)).min(1).max(2), acknowledgedExternalProcessing: z.boolean() }).strict(), req.body);
+    const run = service.startProspectSearch(req.params.business, input);
+    res.status(202).json({ ...service.snapshot(req.params.business), activeProspectSearchId: run.id });
+  });
   app.post(base + '/source-intakes', (req, res) => {
     const payload = parse(z.object({ requestId: z.string().uuid(), revision, urls: z.array(z.string().max(2000)).min(1).max(2) }).strict(), req.body);
     const intake = service.startWebsiteIntake(req.params.business, payload);

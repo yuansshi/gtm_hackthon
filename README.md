@@ -15,12 +15,12 @@ npm start
 
 Open **http://127.0.0.1:3001**. The Express server serves both the API and production UI. For UI development, run `npm run server` and `npm run dev` in two terminals; Vite proxies `/api` to port 3001. `npm run preview` also requires the backend.
 
-The supplied `.env.example` contains dummy Band and Flexprice placeholders. The application does not send requests to Band or Flexprice or infer a verified connection from the presence of a key. AI and Hunter contact research are disabled by default. Do not put personal keys here.
+The supplied `.env.example` contains dummy Band and Flexprice placeholders. The application does not send requests to Band or Flexprice or infer a verified connection from the presence of a key. AI, Tavily prospect search, and Hunter contact research are disabled by default. Do not put personal keys here.
 
 ## Try the five-module flow
 
 1. **Product & ICP:** review company products and capabilities; choose target industries, territory, roles, size criteria, classification, triggers, reference wins, and domain exclusions. A local guided intake recognizes explicit US/Canada/Mexico, OEM, employee-range, NAICS/SIC, and excluded-domain statements. Every proposal is persisted for accept/adjust/dismiss review; it cannot apply itself. Optional project-model intake uses strict structured output and the same review gate. Confirm the profile review and approve for research. Editing the profile revokes research and unsent-message approvals.
-2. **Discovery:** run source research (2 demo credits) over curated and owner-admitted US OEMs, or choose **Research a website** to fetch up to two company pages (2 credits). Review exact company, manufacturer, US-location, and application evidence before adding a new account; it is not automatically shortlisted. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority. The account’s **Contacts** tab also supports optional project-enabled Hunter search and selected-address verification (5 credits each), followed by an explicit contact/source review. Selecting a contact updates editable unsent recipients and requires new message approval.
+2. **Discovery:** use optional project-enabled **Search prospects** to inspect and acknowledge an ICP query plan, retrieve up to three company domains for two local credits, and open fetched sources for review without another intake charge. Alternatively, run source research (2 demo credits) over curated and owner-admitted US OEMs, or choose **Research a website** to fetch up to two company pages (2 credits). Review exact company, manufacturer, US-location, and application evidence before adding a new account; it is not automatically shortlisted. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority. The account’s **Contacts** tab also supports optional project-enabled Hunter search and selected-address verification (5 credits each), followed by an explicit contact/source review. Selecting a contact updates editable unsent recipients and requires new message approval.
 3. **Knowledge graph:** query the native Kuzu database (1 credit), inspect directional relationships and their evidence, and follow Person → Company → Product paths. The graph also retains published previous-employer relationships and local outreach events.
 4. **Outreach:** prepare email or LinkedIn drafts with A/B variants and day 0/3/7 follow-ups. Templates cite the account's application and this supplier's website. Edit, save, reject, or approve the exact version. Approval is bound on the server to business, profile, recipient, subject, body, channel, sequence step, and message version. Recording a dry run costs 1 credit and sends **nothing externally**. Duplicate sends are idempotent; both A/B variants cannot be dispatched to the same account/channel/step.
 5. **Pipeline:** move accounts through Matched, Contacted, Replied, Meeting booked, RFQ received, Engineering review, Quote sent, Trial / qualification, Closed won/lost. Counts use recorded events, with actor and timestamp. Dry-run messages and user-reported outcomes are identified separately. Segmented and A/B counts are descriptive observations.
@@ -33,7 +33,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | --- | --- |
 | Persistence | SQLite workspace transactions, revision checks, restart recovery for interrupted credit reservations |
 | Graph | Native Kuzu 0.11.3, parameterized Cypher, business-scoped nodes/edges, persistent multi-hop queries |
-| Research | Curated companies and quoted-source website intake + live source retrieval; owner-reviewed admission beyond the fixed catalog; not autonomous prospect search |
+| Research | Curated companies, quoted-source website intake, and optional ICP-driven Tavily search with bounded source retrieval; owner-reviewed admission; search fixtures checked, live project search unverified |
 | Contact enrichment | Public addresses/MX plus optional Hunter V2 search and verifier, dated check labels, persona/source review, and recipient/version reset; fixture and public test API checked, live project enrichment unverified |
 | ICP confidence | Visible 0–1 coverage plus provenance for reviewed local/model suggestions; not calibrated probabilities |
 | Drafting | Source-grounded templates by default; optional credential-gated OpenAI structured drafts with required account/supplier citations, proposed claim review, and actual returned token usage |
@@ -78,6 +78,7 @@ The GitHub workflow runs checks and Snyk source/dependency scans. Configure a pr
 - `server/store.js`, `server/graph.js`: transactional workspace store and native graph projection.
 - `src/Billing.jsx`, `server/billing.js`: credit balances, pack/custom reloads, receipts, usage history, limits and retry-safe reload IDs.
 - `server/catalog.js`, `server/evidence.js`: cited research collection, source checks, transparent scoring, DNS MX.
+- `src/ProspectSearch.jsx`, `src/prospect-plan.js`, `server/prospect-search.js`, `server/prospect-search-provider.js`: inspectable ICP queries, optional project search, persistent retrieval proposals, and shared-cost metering.
 - `src/WebsiteIntake.jsx`, `server/website-intake.js`, `server/public-source.js`: public website retrieval, quoted-source admission, persistent candidate collection, and stale-evidence review.
 - `src/ContactResearch.jsx`, `src/contact-evidence.js`, `server/hunter.js`, `server/contact-enrichment.js`: vendor candidates, dated verification, explicit contact selection, restrictions, and retry-safe metering.
 - `server/review-policy.js`: shared account-context invalidation for editable unsent drafts and restricted-recipient gating.
@@ -134,7 +135,7 @@ Review the retained text beside the account form. Use a company name present in 
 
 Accepted candidates persist and take part in subsequent source refreshes. Missing quotes, failed retrieval, or a removed selected email make evidence review required, deselect the account, block qualification/approval, and advance editable unsent draft versions. A successful fetch alone cannot clear that review requirement; fetch fresh pages and complete a new owner review. Sent receipts and historical stages stay intact. Admission is durable before graph projection; a pending graph refresh can be repaired without duplicating or charging for admission.
 
-Sources expire for admission after 24 hours. A changed profile requires fresh research; refresh the workspace after a revision conflict. Dismissal removes a pending intake from the queue but does not refund completed source work. Autonomous search remains unconnected; optional Hunter verification is implemented separately and requires a project key for live use. Protocol, DNS-pinning, state, and verification details are in [Website intake](docs/website-intake.md).
+Sources expire for admission after 24 hours. A changed profile requires fresh research; refresh the workspace after a revision conflict. Dismissal removes a pending intake from the queue but does not refund completed source work. Optional ICP-driven Tavily search feeds this same review path; project keys are required for live search and Hunter verification. Search does not admit accounts autonomously. Protocol, DNS-pinning, state, and verification details are in [Website intake](docs/website-intake.md).
 
 
 ## Optional project Hunter contact research
@@ -154,3 +155,16 @@ node scripts/check-hunter-contract.js
 ```
 
 This command uses Hunter’s documented public `test-api-key`, applies **zero contacts**, and does not establish live contact verification. No live project Hunter key was used for the recorded validation. See [Contact enrichment](docs/contact-enrichment.md) and [Hunter’s API reference](https://hunter.io/api-documentation).
+
+
+## Optional project Tavily prospect search
+
+Set `PROJECT_TAVILY_ENABLED=true` and `PROJECT_TAVILY_API_KEY` to a designated project key in local `.env`, then restart `npm start`. Dummy values and global keys do not enable it. The server fixes the destination to Tavily’s official HTTPS search API and never accepts browser-supplied keys.
+
+Open **Accounts → Search prospects** with an approved US OEM profile. Choose one or two approved product families, inspect the exact queries, and acknowledge external processing. Only those queries and fixed search parameters go to Tavily; supplier details, pricing, contacts, outcomes, and private domain exclusions stay local. Excluded roots/subdomains, existing accounts, directories, and queued sites are filtered before retrieval.
+
+Two local demo credits cover up to two basic queries, eight results per query, three new domains, and two public source pages per domain. Results distinguish exclusions, duplicates, source failures, and ready proposals. Open **Review fetched sources** for exact-quote admission with no additional intake charge. No account is added or shortlisted automatically. **Fetch separately** explicitly starts the normal two-credit website workflow.
+
+Run history survives reloads. Retries with the same request ID do not repeat provider work or charges. Completed searches with empty results or failed source pages consume the search charge; failed searches, interrupted jobs, and stale-profile completion refund once. No automatic replay occurs. Provider usage is recorded only when returned; local credits and refunds do not establish Tavily billing or cancellation. Shared search cost remains business-scoped.
+
+Validation: 95 tests pass, including 16 prospect-search tests with intercepted HTTP contracts and synthetic source fixtures. Desktop browser QA confirmed query acknowledgement reset, run resumption, exclusion/partial-failure display, source-review handoff, admission without another charge, persistent accepted status, separate-fetch prefill, business isolation, Escape, and no horizontal overflow. No live Tavily request was made with a project key. See [Prospect search](docs/prospect-search.md).
