@@ -309,3 +309,15 @@ test('billing decisions bind to consent versions, not unrelated workspace teleme
   x.service.pauseBilling('allco',valid);assert.equal(x.store.read('allco').flexprice.consent.version,2);
   await assert.rejects(x.service.connectBilling('allco',valid),{code:'flexprice_decision_changed'});
 });
+
+test('due source schedules wait for pending metering and resume after reconciliation', async t => {
+  let sourceCalls=0;const x=await setup(t,{readWebsiteSource:async url=>{sourceCalls++;return {url,finalUrl:url,title:'Fixture company publication',text:'Fixture manufacturer builds industrial equipment for OEM customers. Engineering qualification is required.',checkedAt:new Date().toISOString(),fetchStatus:'reachable',contentHash:'fixture'};}});
+  x.service.approveProfile('allco',true,x.store.read('allco').revision);
+  x.store.mutate('allco',state=>{state.leads=[{...structuredClone(researchCatalog[0]),businessId:'allco',fit:scoreAccount(researchCatalog[0],state),selected:false,stage:'Matched',events:[],contact:{email:null}}];});
+  await x.connect();await x.consume();const leadId=researchCatalog[0].id;
+  x.service.configureSignalMonitor('allco',leadId,{revision:x.store.read('allco').revision,urls:['https://elliottequip.com/'],enabled:true,frequency:'daily',acknowledgedSchedule:true});
+  x.store.mutate('allco',state=>{state.leads[0].signalMonitor.nextCheckAt=new Date(Date.now()-1000).toISOString();});
+  await x.service.tickSignals();assert.equal(sourceCalls,0);assert.equal(x.store.read('allco').leads[0].signalMonitor.enabled,true);
+  await x.service.tickBilling();await x.sync();await x.service.tickSignals();
+  const monitor=x.store.read('allco').leads[0].signalMonitor;assert.equal(sourceCalls,1);assert.equal(monitor.enabled,true);assert.equal(monitor.runs[0].status,'completed');assert.equal(monitor.pausedReason,null);assert.equal(x.store.read('allco').wallet.ledger.length,2);
+});

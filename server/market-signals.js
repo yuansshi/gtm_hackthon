@@ -99,7 +99,7 @@ export function createMarketSignals({store,graph,competitors,snapshot,profileDig
       const state=store.read(id);if(state.jobs.some(job=>job.status==='running'))continue;
       const due=state.leads.find(lead=>lead.signalMonitor?.enabled&&Date.parse(lead.signalMonitor.nextCheckAt)<=Date.now());if(!due)continue;
       try{await beforeStart(id);await start(id,due.id,{requestId:randomUUID(),revision:store.read(id).revision},{scheduled:true}).completion;}
-      catch(error){if(error.code==='job_running')continue;store.mutate(id,current=>{const lead=account(current,due.id);lead.signalMonitor.enabled=false;lead.signalMonitor.nextCheckAt=null;lead.signalMonitor.pausedReason=error instanceof AppError?error.message:'Scheduled source checks need review.';addActivity(current,'Signal schedule paused',`${lead.name}; ${lead.signalMonitor.pausedReason}`,'Source monitor',{leadId:lead.id});});}
+      catch(error){if(['job_running','flexprice_usage_pending'].includes(error.code))continue;store.mutate(id,current=>{const lead=account(current,due.id);lead.signalMonitor.enabled=false;lead.signalMonitor.nextCheckAt=null;lead.signalMonitor.pausedReason=error instanceof AppError?error.message:'Scheduled source checks need review.';addActivity(current,'Signal schedule paused',`${lead.name}; ${lead.signalMonitor.pausedReason}`,'Source monitor',{leadId:lead.id});});}
     }
   };
   return {configure,start,review,tick,drain:()=>Promise.allSettled([...inFlight.values()])};
