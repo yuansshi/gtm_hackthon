@@ -26,7 +26,7 @@ The current-stage filter can select accounts by outcome. Rates then describe tha
 
 Observations are grouped by channel, A/B variant, sequence step, drafting method, and delivery mode. Overlapping account audiences across rows are not additive. Explicit reply-to-draft linkage prevents a generic account reply from being credited to every variant or channel previously used for that account.
 
-The prototype currently has no provider reply feed or UI for entering a reply-to-draft reference. Existing manual stage changes therefore remain unattributed in variant analysis. No winner, causal lift, calibrated prediction, or significance claim is made. Small samples and unequal follow-up limit comparisons.
+Pipeline’s **Record outcome** dialog supports explicit user-reported or demo reply-to-draft references, notes, and optional published respondents. Actual reports can link only provider-accepted outbound records; demo reports can link only local dry runs. Existing quick stage edits without a message reference remain unattributed. No provider reply feed is connected. See [Outcome reporting](outcome-reporting.md). No winner, causal lift, calibrated prediction, or significance claim is made. Small samples and unequal follow-up limit comparisons.
 
 ## Evidence and validation
 

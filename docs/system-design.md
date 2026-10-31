@@ -42,7 +42,7 @@ On restart, interrupted jobs become failed and reserved credits are refunded; jo
 | Product → competes_with → Competitor | Sourced category overlap or labeled alternative hypothesis |
 | Person → previously_employed_at → Company | Published history, when available |
 | Company → contacted_via → Signal | Exact draft ID and delivery mode; dry run distinctly labeled |
-| Person → replied_to → Signal | Schema available; no automatic reply ingestion implemented |
+| Person → replied_to → Signal | Explicitly reported reply with eligible message and matching published respondent; demo/manual provenance retained |
 
 The following query runs in Kuzu rather than a JavaScript graph simulation:
 
@@ -95,4 +95,11 @@ The current implementation adds demo credits without payment and is labeled acco
 
 Board, List, and Analytics share the same selected account population. Analytics then filters event and outbound-record timestamps and attribution type. Each conversion uses distinct account IDs from a common recorded-contact cohort; outcomes must follow a matching contact. Incomplete histories remain visible in raw milestone counts. A zero denominator is unavailable. Simulated and provider-accepted outbound records are separate, and acceptance is not inbox delivery.
 
-Variant observations require an explicit same-account reply-to-draft reference and chronological order; manual stage updates are not silently assigned to prior messages. Channels, sequence steps, drafting methods, and delivery modes remain separate. The current application has no provider reply feed or UI for entering linked reply events. Detailed definitions and validation are in [Pipeline analytics](pipeline-analytics.md).
+Variant observations require an explicit same-account reply-to-draft reference and chronological order; manual stage updates are not silently assigned to prior messages. Channels, sequence steps, drafting methods, and delivery modes remain separate. The Record outcome dialog captures confirmed user-reported or demo entries with optional eligible message links. New context advances unsent message versions and clears approvals; HITL shows those reports for review. The current application has no provider reply feed. Detailed definitions and validation are in [Pipeline analytics](pipeline-analytics.md).
+
+
+## Outcome persistence and projection
+
+[Outcome reporting](outcome-reporting.md) persists an append-only account event and audit entry atomically in SQLite before refreshing Kuzu. Same-business request IDs deduplicate retries before revision checks; changed input cannot reuse an ID. The server fixes actor and provenance, validates eligible message status/business/account/time and any published respondent, and never infers provider verification. New reports invalidate editable unsent-message approvals and versions for that account.
+
+Backdated history can be stored without stage changes. Future records and stage regression over a newer event are rejected. Graph failures leave a saved pending projection; an explicit replay or graph query repairs it. Unknown respondents remain unknown; they do not create Person nodes. Manual notes stay in the local application and human review surface, not the model context.

@@ -78,18 +78,18 @@ export default function IndustryApp() {
       try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(next); } catch (e) { setConnectionError(e.message); }
     }, 1500); return () => clearInterval(timer);
   }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns]);
-  const perform = async task => {
+  const perform = async (task, onError) => {
     const id = state.businessId; setBusy(true);
-    try { return await task(id); } catch (e) { setToast(e.message); return null; } finally { setBusy(false); }
+    try { return await task(id); } catch (e) { setToast(e.message); onError?.(e); return null; } finally { setBusy(false); }
   };
-  const act = (path, body = {}, method = 'POST', returnsState = true) => perform(async id => {
+  const act = (path, body = {}, method = 'POST', returnsState = true, onError) => perform(async id => {
     if (!connected) throw new Error('Start the local server and reconnect first.');
     if (dirty) throw new Error('Save your profile edits before continuing.');
     const next = await api(`/businesses/${id}${path}`, method, method === 'GET' ? undefined : body);
     const snapshot = returnsState && next.businessId ? next : await api(`/businesses/${id}`);
     if (activeBusiness.current === id) setState(snapshot);
     return next;
-  });
+  }, onError);
 
   useEffect(() => {
     try { localStorage.setItem(businessStorageKey(state.businessId), JSON.stringify(state)); localStorage.setItem(activeBusinessKey, state.businessId); }

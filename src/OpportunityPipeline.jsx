@@ -1,14 +1,15 @@
 import React, { useRef, useState } from 'react';
-import { ArrowRight, Check, ChartNoAxesCombined, Columns3, List, Search, ShieldCheck, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, ChartNoAxesCombined, ClipboardCheck, Columns3, Info, List, Search, ShieldCheck, X } from 'lucide-react';
 import './pipeline.css';
 import PipelineAnalytics from './PipelineAnalytics';
+import { OutcomeReport, OutcomeHistory } from './OutcomeReport';
 
 // Keep the industrial lifecycle aligned with the existing stage PATCH contract.
 const stages = ['Matched', 'Contacted', 'Replied', 'Meeting booked', 'RFQ received', 'Engineering review', 'Quote sent', 'Trial / qualification', 'Closed won', 'Closed lost'];
 const activeStages = new Set(stages.slice(1, 8));
 const scopeLabels = { all: 'All accounts', active: 'Active pipeline', selected: 'Selected accounts', won: 'Closed won' };
 const inScope = (lead, scope) => scope === 'selected' ? Boolean(lead.selected) : scope === 'active' ? activeStages.has(lead.stage) : scope === 'won' ? lead.stage === 'Closed won' : true;
-const latestEvent = lead => lead.events?.at(-1);
+const latestEvent = lead => [...(lead.events || [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || Date.parse(a.recordedAt || a.at) - Date.parse(b.recordedAt || b.at)).at(-1);
 const formatDate = value => {
   if (!value) return 'No activity recorded';
   const date = new Date(value);
@@ -18,7 +19,7 @@ const modeLabel = mode => ({ dry_run: 'Dry run', user_reported: 'User-reported',
 const count = value => Number.isFinite(value) ? value : 0;
 
 function EventMode({ event }) {
-  return <span className={`op-mode ${event?.mode === 'dry_run' ? 'op-mode-dry' : event?.mode === 'user_reported' ? 'op-mode-user' : ''}`}>{modeLabel(event?.mode)}</span>;
+  return <span className={`op-mode ${event?.mode === 'dry_run' ? 'op-mode-dry' : event?.mode === 'user_reported' ? 'op-mode-user' : ''}`}>{event?.recordType === 'outcome' && event.mode === 'dry_run' ? 'Demo outcome' : modeLabel(event?.mode)}</span>;
 }
 
 function StageSelect({ lead, act, busy }) {
@@ -29,6 +30,8 @@ function StageSelect({ lead, act, busy }) {
 
 export function Pipeline({ state, act, busy }) {
   const [view, setView] = useState('board');
+  const [reportLead, setReportLead] = useState(null);
+  const [outcomeReceipt, setOutcomeReceipt] = useState(null);
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState('all');
   const [stageFilter, setStageFilter] = useState('');
@@ -66,7 +69,8 @@ export function Pipeline({ state, act, busy }) {
   };
 
   return <div className="op-pipeline">
-    <header className="op-page-header"><div><span className="op-eyebrow">Revenue workspace</span><h1>Opportunity pipeline</h1><p>Move industrial accounts from first match to qualified opportunity.</p></div><span className="op-recorded-badge"><ShieldCheck size={14} aria-hidden="true" />User-reported stages</span></header>
+    <header className="op-page-header"><div><span className="op-eyebrow">Revenue workspace</span><h1>Opportunity pipeline</h1><p>Move industrial accounts from first match to qualified opportunity.</p></div><div className="op-header-actions"><span className="op-recorded-badge"><ShieldCheck size={14} aria-hidden="true" />User-reported stages</span><button className="button primary" disabled={busy || !leads.length} onClick={() => setReportLead(accounts[0]?.id || leads[0]?.id)}><ClipboardCheck size={15} />Record outcome</button></div></header>
+    {outcomeReceipt && <div className={`outcome-receipt ${outcomeReceipt.outcomeProjection !== 'synced' ? 'pending' : ''}`} role="status">{outcomeReceipt.outcomeProjection === 'synced' ? <CheckCircle2 size={17} /> : <Info size={17} />}<span>{outcomeReceipt.outcomeProjection === 'synced' ? 'Outcome saved and graph updated.' : 'Outcome saved. Graph refresh is pending; retry from outcome history.'} No credits charged.{outcomeReceipt.outcomeDraftsForReview > 0 && ` ${outcomeReceipt.outcomeDraftsForReview} unsent message(s) need a fresh version review.`}</span><button aria-label="Dismiss outcome receipt" onClick={() => setOutcomeReceipt(null)}><X size={15} /></button></div>}
 
     <div className="op-summaries" aria-label="Filter pipeline by account summary">
       {summaries.map(([key, label, total, description]) => <button type="button" className={`op-summary-card ${scope === key ? 'is-active' : ''}`} key={key} aria-pressed={scope === key} onClick={() => setScope(key)}><span className="op-summary-label">{label}{scope === key && <Check size={14} aria-hidden="true" />}</span><strong>{total}</strong><small>{description}</small></button>)}
@@ -104,5 +108,7 @@ export function Pipeline({ state, act, busy }) {
       <footer className="op-data-note"><ShieldCheck size={14} aria-hidden="true" /><span>Stage edits are recorded as user-reported. Dry runs simulate outreach; no external message is sent.</span>{busy && <strong role="status">Saving…</strong>}</footer>
     </section>
 
+    <OutcomeHistory state={state} act={act} busy={busy} receipt={outcomeReceipt} />
+    {reportLead && <OutcomeReport state={state} act={act} busy={busy} initialLeadId={reportLead} close={() => setReportLead(null)} saved={setOutcomeReceipt} />}
   </div>;
 }

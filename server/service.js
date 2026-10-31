@@ -7,6 +7,7 @@ import { createModelProvider } from './model.js';
 import { localIntake, validIntakeValue } from './intake.js';
 import { billingSummary } from './billing.js';
 import { analyzePipeline } from '../src/pipeline-metrics.js';
+import { createOutcomeReporter, markOutcomeProjection } from './outcomes.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
@@ -49,6 +50,7 @@ export function metrics(state, { asOf } = {}) {
 
 export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider() }) {
   const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+  const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
   const updateProfile = (s, incoming) => {
     const before = profileDigest(s);
     const previousIcp = structuredClone(s.icp);
@@ -296,8 +298,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   }).state;
   const graphView = async id => {
     const reservation = store.reserve(id, 'graph_query', costs.graph_query);
-    try { const state = store.read(id); await graph.sync(state, competitors[id]); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
+    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, graphView, assistantStatus: () => model.status() };
+  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, graphView, assistantStatus: () => model.status() };
 }

@@ -1,0 +1,64 @@
+.op-header-actions{display:flex;align-items:center;gap:12px}
+.outcome-dialog{width:660px;max-width:calc(100vw - 70px);max-height:88vh;padding:0;border:1px solid #dfe5ee;border-radius:10px;background:#fff;color:#3e536e;box-shadow:0 25px 90px #1e344e2b;overflow:auto}
+.outcome-dialog::backdrop{background:#2537504b;backdrop-filter:blur(2px)}
+.outcome-dialog-heading{display:flex;align-items:center;gap:12px;padding:19px 22px;border-bottom:1px solid #e5ebf2;background:#fcfdff;position:sticky;top:0;z-index:1}
+.outcome-dialog-heading>span{display:grid;place-items:center;width:38px;height:38px;border-radius:8px;background:#edf3fd;color:#4f75b4}
+.outcome-dialog-heading>div{flex:1}
+.outcome-dialog-heading h2{font-size:18px;font-weight:700;letter-spacing:-.4px;color:#304864}
+.outcome-dialog-heading p{font-size:11px;color:#6d7c90;margin-top:3px}
+.outcome-form{border:0;margin:0;padding:19px 22px 21px;min-width:0}
+.outcome-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.outcome-form label{display:block;font-size:12px;font-weight:600;color:#465f7e;margin-bottom:15px}
+.outcome-form input:not([type=checkbox]),.outcome-form select,.outcome-form textarea{display:block;width:100%;border:1px solid #d9e2ed;border-radius:5px;padding:9px 10px;background:#fff;color:#405875;font-size:12px;margin-top:6px;min-height:37px}
+.outcome-form label>small{font-size:10px;color:#6c7d94;font-weight:400;margin-left:4px}
+.outcome-form textarea{resize:vertical;line-height:1.7}
+.outcome-form input::placeholder,.outcome-form textarea::placeholder{color:#8794a7}
+.outcome-dialog :is(button,input,select,textarea,summary):focus-visible,.outcome-history :is(button,a,summary):focus-visible{outline:3px solid #89a9e6;outline-offset:3px}
+.outcome-context{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.7;color:#59738f;background:#f0f6fb;border:1px solid #dfeaf3;border-radius:6px;padding:10px 12px;margin:0 0 16px}
+.outcome-context svg{margin-top:3px}
+.outcome-context.demo{background:#fff8ea;border-color:#efdfbd;color:#8c6930}
+.outcome-field-help{color:#7b6a4c;font-size:10px;line-height:1.7;margin:-7px 0 15px}
+.outcome-form label.outcome-checkbox{display:flex;gap:9px;align-items:flex-start;font-size:11px;font-weight:500;line-height:1.7;margin-top:4px}
+.outcome-checkbox input{margin:2px 0 0;flex-shrink:0}
+.outcome-checkbox small{display:block;font-size:10px;color:#718197;font-weight:400}
+.outcome-form .outcome-ack{padding:12px;border:1px solid #d7e4f6;background:#f4f8ff;border-radius:6px;color:#436286;margin-top:18px}
+.outcome-form .outcome-ack.demo{border-color:#e8d5ae;background:#fff8eb;color:#8a6329}
+.outcome-error{background:#fff3ef;border:1px solid #ebcfc4;border-radius:6px;padding:11px 12px;font-size:12px;color:#94593f;margin-bottom:14px}
+.outcome-error .text-button{font-size:11px;margin-top:5px}
+.outcome-form-actions{display:flex;align-items:center;gap:8px;padding-top:8px}
+.outcome-form-actions>span{margin-right:auto;color:#6d7e96;font-size:10px}
+.outcome-form-actions .button{font-size:12px;min-height:36px}
+.outcome-receipt{display:flex;align-items:center;gap:9px;border:1px solid #cadfd6;background:#f0f8f4;color:#3d7765;padding:12px 15px;border-radius:6px;font-size:12px;margin:0 0 18px}
+.outcome-receipt.pending{background:#fff9ed;color:#8d6c30;border-color:#eadbbc}
+.outcome-receipt>span{flex:1}
+.outcome-receipt button{display:grid;place-items:center;background:transparent;color:inherit;padding:4px}
+.outcome-history{border:1px solid #dfe6ef;border-radius:8px;background:#fff;margin-top:20px;overflow:hidden}
+.outcome-history>summary{cursor:pointer;padding:16px 19px;color:#425c7d;font-weight:650;font-size:13px}
+.outcome-history>summary small{font-size:11px;color:#6f8098;font-weight:400;display:block;margin:4px 0 0 15px}
+.outcome-history-item{border-top:1px solid #e9edf3;padding:17px 20px;font-size:12px}
+.outcome-history-title{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.outcome-history-title strong{font-size:13px;font-weight:650;color:#3c5678}
+.outcome-history-title>div>span{margin-left:12px;color:#607994;font-size:12px}
+.outcome-type{background:#eef7f4;border:1px solid #d5e9e0;border-radius:4px;color:#387865;padding:3px 7px;font-size:10px;font-weight:600;white-space:nowrap}
+.outcome-type.demo{background:#fff7e8;border-color:#eddbb9;color:#94703a}
+.outcome-history-item>p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:9px;color:#5c718c;line-height:1.8}
+.outcome-history-meta{display:flex;gap:15px;flex-wrap:wrap;color:#74859d;font-size:10px;margin-top:10px}
+.outcome-message-link{color:#617b9a;font-size:11px;margin-top:9px}
+.outcome-history-item>a{display:inline-flex;align-items:center;gap:5px;text-decoration:none;color:#4e72b1;font-size:11px;margin-top:9px}
+.outcome-history-item>a:hover{text-decoration:underline}
+.outcome-projection{display:flex;align-items:center;gap:6px;color:#658576;font-size:10px;margin-top:10px}
+.outcome-projection button{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid #d9e2ef;padding:4px 7px;border-radius:4px;color:#5b78a3;font-size:10px;margin-left:6px}
+@media(min-width:1151px) and (max-width:1350px){.op-header-actions{gap:8px}.op-header-actions .op-recorded-badge{display:none}}
+
+.outcome-attribution{border:1px solid #e1e8f1;border-radius:6px;margin:0 0 16px;padding:0 12px;background:#fcfdff}
+.outcome-attribution>summary{font-size:11px;cursor:pointer;font-weight:600;color:#547197;padding:11px 0}
+.outcome-attribution>summary small{display:block;font-size:10px;color:#75869e;font-weight:400;margin:3px 0 0 15px}
+.outcome-attribution[open]>summary{border-bottom:1px solid #e5ebf2;margin-bottom:14px}
+.outcome-form-actions{position:sticky;bottom:0;z-index:1;background:#fff;border-top:1px solid #e4eaf2;margin:0 -22px -21px;padding:12px 22px}
+
+.hitl-outcome-context{border:1px solid #e7d7bb;border-radius:6px;background:#fffcf6;padding:12px;margin:0 0 18px;max-height:230px;overflow:auto}
+.hitl-outcome-context h3{font-size:12px;color:#82602c;margin:0 0 5px}
+.hitl-outcome-context>p{font-size:11px;color:#826c4b;line-height:1.7;margin-bottom:8px}
+.hitl-outcome-context details{border-top:1px solid #ede1cd;margin-top:7px;padding-top:6px}
+.hitl-outcome-context summary{cursor:pointer;font-size:10px;color:#7d6d55;line-height:1.7}
+.hitl-outcome-context details>p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#6a7688;line-height:1.8;margin:7px 0}

@@ -73,7 +73,7 @@ export function analyzePipeline(state, { accountIds, days = 0, mode = 'all', asO
   }).sort((a, b) => a.industry.localeCompare(b.industry) || a.tier.localeCompare(b.tier));
   const records = accounts.map(account => ({ id: account.id, name: account.name, industry: account.industry || 'Unknown industry', tier: account.fit?.tier || 'Unrated', source: account.source, events: eventsByAccount.get(account.id), reached: reach.filter(row => row.accountIds.includes(account.id)).map(row => row.stage) }));
   return { asOf: new Date(end).toISOString(), startAt: Number.isFinite(start) ? new Date(start).toISOString() : null, days, mode,
-    accounts: accounts.length, activeAccounts: records.filter(record => record.events.length).length,
+    accounts: accounts.length, demoEventAccounts: records.filter(record => record.events.some(event => event.mode === 'dry_run')).length, activeAccounts: records.filter(record => record.events.length).length,
     contacted: firstContact.size, reach, logged, records, segments, experiments,
     simulated: outbound.filter(draft => draft.status === 'simulated').length, liveAccepted: outbound.filter(draft => draft.status === 'accepted').length,
     repliesWithoutContact, unlinkedReplyAccounts: [...unlinkedReplyAccounts], invalidTimes, futureTimes, unclassifiedEvents };

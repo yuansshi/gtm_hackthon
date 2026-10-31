@@ -53,10 +53,23 @@ export async function createGraph(directory) {
               await edge('previously_employed_at', personId, previousId, businessId, p.source);
             }
           }
-          for (const draft of state.drafts.filter(d => d.leadId === lead.id && ['simulated', 'accepted'].includes(d.status))) {
+          const outbound = state.drafts.filter(d => d.leadId === lead.id && ['simulated', 'accepted'].includes(d.status));
+          for (const draft of outbound) {
             const outreachId = prefix + 'outreach:' + draft.id;
-            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { channel: draft.channel, mode: draft.status, at: draft.sentAt });
+            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { draftId: draft.id, channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, mode: draft.status === 'simulated' ? 'dry_run' : 'live', at: draft.sentAt, description: draft.status === 'simulated' ? 'Local dry run; no external message sent.' : 'Provider acceptance; inbox delivery not established.' });
             await edge('contacted_via', companyId, outreachId, businessId, draft.id);
+          }
+          for (const report of (lead.events || []).filter(event => event.recordType === 'outcome')) {
+            const outcomeId = prefix + 'outcome:' + report.id;
+            const isDemo = report.mode === 'dry_run';
+            const attribution = isDemo ? 'Demo observation; no real response established.' : 'Manually reported; not provider-verified.';
+            await node('Signal', outcomeId, `${report.stage} · ${isDemo ? 'demo' : 'user-reported'}`, businessId, { outcomeId: report.id, stage: report.stage, at: report.at, recordedAt: report.recordedAt, actor: report.actor, mode: report.mode, provenance: 'user_reported', providerVerified: false, draftId: report.draftId, respondent: report.respondent, source: report.evidenceUrl || null, description: `${attribution} ${report.note}` });
+            await edge('signal_for', outcomeId, companyId, businessId, `${attribution} Recorded by ${report.actor} at ${report.recordedAt}.`);
+            const draft = outbound.find(draft => draft.id === report.draftId && draft.businessId === businessId);
+            const personIndex = report.respondent ? lead.people.findIndex(person => person.name === report.respondent.name && person.source === report.respondent.source) : -1;
+            if (report.stage === 'Replied' && draft && personIndex >= 0 && (isDemo === (draft.status === 'simulated')) && Date.parse(report.at) >= Date.parse(draft.sentAt)) {
+              await edge('replied_to', prefix + 'person:' + lead.id + ':' + personIndex, prefix + 'outreach:' + draft.id, businessId, `${attribution} ${report.respondent.name}; occurrence ${report.at}; recorded by ${report.actor} at ${report.recordedAt}.`);
+            }
           }
         }
         await query('COMMIT');
