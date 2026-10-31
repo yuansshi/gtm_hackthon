@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { AppError, addActivity, digest, now } from './store.js';
 import { pipelineStages } from './catalog.js';
+import { invalidateAccountDrafts } from './review-policy.js';
 
 const reports = state => state.leads.flatMap(lead => (lead.events || []).filter(event => event.recordType === 'outcome').map(event => ({ lead, event })));
 const invalid = message => { throw new AppError(400, message, 'invalid_outcome'); };
@@ -57,10 +58,7 @@ export function createOutcomeReporter({ store, graph, competitors, snapshot }) {
         if (input.updateStage && time < latestTime) throw new AppError(409, 'A newer stage event is already recorded. Uncheck the stage update to add this as history.', 'outcome_before_latest');
         outcomeId = randomUUID();
         const mode = input.kind === 'demo' ? 'dry_run' : 'user_reported';
-        const invalidatedDraftIds = [];
-        for (const draft of state.drafts.filter(draft => draft.leadId === leadId && ['draft', 'rejected', 'approved'].includes(draft.status))) {
-          draft.version = (draft.version || 1) + 1; draft.status = 'draft'; draft.approvedHash = null; draft.approvedAt = null; draft.contextOutcomeId = outcomeId; draft.reviewReason = 'account_outcome_changed'; invalidatedDraftIds.push(draft.id);
-        }
+        const invalidatedDraftIds = invalidateAccountDrafts(state, leadId, { reason: 'account_outcome_changed', outcomeId });
         account.events ||= [];
         account.events.push({ id: outcomeId, requestId: input.requestId, requestHash, recordType: 'outcome', stage: payload.stage, at: payload.occurredAt, recordedAt: now(), actor: 'You', mode, provenance: 'user_reported', providerVerified: false, note: payload.note, evidenceUrl, draftId: payload.draftId, respondent, updateStage: input.updateStage, invalidatedDraftIds, graphStatus: 'pending' });
         if (input.updateStage) account.stage = input.stage;

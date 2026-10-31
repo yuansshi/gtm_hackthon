@@ -8,12 +8,16 @@ import { localIntake, validIntakeValue } from './intake.js';
 import { billingSummary } from './billing.js';
 import { analyzePipeline } from '../src/pipeline-metrics.js';
 import { createOutcomeReporter, markOutcomeProjection } from './outcomes.js';
+import { createWebsiteIntake, reviewWebsiteCandidate, markWebsiteProjection } from './website-intake.js';
+import { readPublicSource } from './public-source.js';
+import { invalidateAccountDrafts } from './review-policy.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
 const findLead = (s, id) => { const lead = s.leads.find(l => l.id === id); if (!lead) throw new AppError(404, 'Account not found in this business.', 'lead_not_found'); return lead; };
 const findDraft = (s, id) => { const d = s.drafts.find(d => d.id === id); if (!d) throw new AppError(404, 'Draft not found in this business.', 'draft_not_found'); return d; };
 export function exclusionReason(lead, state) {
+  if (lead.evidenceNeedsReview) return 'Website evidence needs a new quoted-source review before qualification.';
   if (!/united states|\busa?\b/i.test(state.icp.regions) || lead.country !== 'United States') return 'Outside the currently supported US research collection.';
   if (!state.icp.segments.some(s => /OEM|manufacturer/i.test(s))) return 'The current research collection supports equipment OEM campaigns only.';
   if (!state.productFamilies.includes(lead.productFamily)) return 'Relevant product family is not selected in this campaign.';
@@ -22,6 +26,7 @@ export function exclusionReason(lead, state) {
   return null;
 }
 const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
+const accountContextDigest = lead => digest({ source: lead.source, sourceIntakeId: lead.sourceIntakeId, facts: lead.facts, application: lead.application, signal: lead.signal, people: lead.people, contact: lead.contact, outcomes: lead.events?.filter(event => event.recordType === 'outcome').map(event => event.id) });
 
 export function metrics(state, { asOf } = {}) {
   const reached = stage => state.leads.filter(l => l.events.some(e => e.stage === stage)).length;
@@ -48,8 +53,9 @@ export function metrics(state, { asOf } = {}) {
     caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. Conversion rates use the same recorded-contact cohort and require outcomes after contact. A/B comparisons require explicit reply-to-draft links and are descriptive, not causal.' };
 }
 
-export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider() }) {
+export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource }) {
   const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+  const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
   const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
   const updateProfile = (s, incoming) => {
     const before = profileDigest(s);
@@ -155,23 +161,28 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const completion = (async () => {
       try {
         step('Planner', `Scope: ${initial.company.name}; ${initial.icp.regions}; ${initial.icp.segments.join(', ')}. Only this business’s sources and contacts will be used.`);
-        let candidates = researchCatalog.filter(c => c.businesses.includes(id));
+        let candidates = [...researchCatalog.filter(c => c.businesses.includes(id)), ...(initial.customCandidates || [])];
         const excluded = [];
         candidates = candidates.filter(c => {
-          const reason = exclusionReason(c, initial);
+          const reason = exclusionReason(c.customEvidence ? { ...c, evidenceNeedsReview: false } : c, initial);
           if (reason) excluded.push({ name: c.name, reason }); return !reason;
         });
         step('Builder', `Fetching up to ${candidates.length} real candidate accounts. These are research starting points; no RFQ or supplier opening is assumed.`);
         const results = [];
-        for (const candidate of candidates) results.push(await review(candidate, initial));
+        for (const candidate of candidates) results.push(candidate.customEvidence ? await reviewWebsiteCandidate(candidate, initial, readWebsiteSource) : await review(candidate, initial));
         step('Reviewer', `${results.length} candidates have inline primary sources. Company size, named buying authority, mailbox deliverability, and purchase intent remain unknown unless separately verified.`);
-        step('Security reviewer', 'Allowlisted HTTPS sources only. Private destinations, unsupported redirects, and oversized pages are blocked. No outbound message was queued.');
+        step('Security reviewer', 'Curated and reviewer-registered HTTPS sources only. Website intakes pin validated public addresses. Private destinations, unsupported redirects, and oversized pages are blocked. No outbound message was queued.');
         store.mutate(id, s => {
           if (!s.approved || profileDigest(s) !== job.profileHash) throw new AppError(409, 'Profile changed while research was running. Results were not applied.', 'stale_research');
           for (const lead of results) {
             const existing = s.leads.find(l => l.id === lead.id);
-            if (existing) Object.assign(existing, lead, { excludedReason: null, selected: existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact });
-            else s.leads.push(lead);
+            if (existing) {
+              const newlyStale = lead.customEvidence && lead.evidenceNeedsReview && !existing.evidenceNeedsReview;
+              const preserved = { selected: lead.evidenceNeedsReview ? false : existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact };
+              Object.assign(existing, lead, preserved, { excludedReason: exclusionReason(lead, s) });
+              if (newlyStale) invalidateAccountDrafts(s, existing.id, { reason: 'account_source_changed', intakeId: lead.sourceIntakeId });
+            } else s.leads.push({ ...lead, excludedReason: exclusionReason(lead, s) });
+            if (lead.customEvidence && lead.evidenceNeedsReview) { const candidate = s.customCandidates?.find(item => item.id === lead.id); if (candidate) candidate.evidenceNeedsReview = true; }
           }
           const j = s.jobs.find(x => x.id === job.id); j.status = 'completed'; j.completedAt = now(); j.excluded = excluded;
           addActivity(s, 'Discovery completed', `${results.length} real accounts reviewed. ${excluded.length} excluded by geography / collection scope.`, 'Research agent');
@@ -198,6 +209,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       const result = lead.publicEmail ? await mx(lead.publicEmail) : { status: 'not_available', records: [] };
       store.mutate(id, s => {
         const current = findLead(s, leadId);
+        requireEligible(current, s);
+        if (!s.approved || profileDigest(s) !== profileDigest(initial) || current.publicEmail !== lead.publicEmail || current.sourceIntakeId !== lead.sourceIntakeId) throw new AppError(409, 'Account or profile evidence changed during the contact check. Check it again.', 'stale_account_context');
         current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: 'unverified', verificationProvider: 'Public source + DNS MX', enrichmentNote: 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
         addActivity(s, 'Contact research checked', `${lead.name}: ${lead.publicEmail ? 'published company address; MX ' + result.status : 'no public email established'}. Mailbox remains unverified.`, 'Enrichment agent');
       });
@@ -228,6 +241,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   const draftWithModel = async (id, leadId, { channel = 'email', variant = 'A', sequenceStep = 0, requestId, acknowledgedExternalProcessing = false, revision }) => {
     if (!acknowledgedExternalProcessing) throw new AppError(400, 'Confirm sending the supplier profile and this account’s public evidence to the project model.', 'external_processing_review_required');
     const before = store.read(id); const account = findLead(before, leadId);
+    const accountHash = accountContextDigest(account);
     if (!before.approved || !account.selected) throw new AppError(409, 'Approve the profile and shortlist this account first.', 'profile_approval_required');
     requireEligible(account, before);
     const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep }, 'model', revision);
@@ -235,11 +249,12 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const { initial, run } = started;
     let generated;
     try {
-      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...account.people.map(p => p.source), initial.company.website])];
+      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
       const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep };
       generated = await model.draft({ context, sources, requestId });
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {
         const lead = findLead(s, leadId); requireEligible(lead, s);
+        if (accountContextDigest(lead) !== accountHash) throw new AppError(409, 'Account evidence changed during generation. Review the new context and request a fresh draft.', 'stale_account_context');
         if (!s.approved || !lead.selected) throw new AppError(409, 'Account or profile approval changed during generation.', 'stale_assistant_context');
         const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep], recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
           subject: generated.value.subject, body: generated.value.body, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
@@ -264,6 +279,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!acknowledged || d.version !== version) throw new AppError(409, 'Review the current draft version before approval.', 'stale_draft');
     if (!s.approved || d.profileHash !== profileDigest(s)) throw new AppError(409, 'Draft context changed. Generate a draft from the approved profile.', 'stale_profile');
     if (d.status !== 'draft' && d.status !== 'rejected') throw new AppError(409, 'Only an editable draft can be approved.', 'draft_locked');
+    requireEligible(findLead(s, d.leadId), s);
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
     addActivity(s, 'Exact message approved', `Recipient, subject, content, channel, and version ${d.version} recorded for ${findLead(s, d.leadId).name}.`, 'You', { draftId });
@@ -298,8 +314,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   }).state;
   const graphView = async id => {
     const reservation = store.reserve(id, 'graph_query', costs.graph_query);
-    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
+    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, graphView, assistantStatus: () => model.status() };
+  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, assistantStatus: () => model.status() };
 }

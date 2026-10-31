@@ -14,7 +14,7 @@ export const publicDraft = d => ({ ...d, approvedHash: d.approvedHash || null })
 
 export function initialRuntime(id) {
   return {
-    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
+    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
     wallet: { credits: 100, initialCredits: 100, currency: 'demo credits', ledger: [] },
     version: 2, revision: 0, serverPersisted: true,
   };
@@ -24,6 +24,17 @@ export function addActivity(state, title, detail, actor = 'You', metadata = {}) 
   const event = { id: randomUUID(), at: now(), title, detail, actor, ...metadata };
   state.activity = [event, ...state.activity].slice(0, 300);
   return event;
+}
+
+export function recoverInterruptedWork(store) {
+  for (const id of businesses.map(business => business.id)) {
+    for (const entry of store.read(id).wallet.ledger.filter(entry => entry.status === 'reserved')) store.settle(id, entry.id, false);
+    store.mutate(id, state => {
+      for (const job of state.jobs.filter(job => job.status === 'running')) { job.status = 'failed'; job.error = 'Server restarted; reserved credits refunded. Start a new research request.'; job.completedAt = now(); }
+      for (const intake of state.sourceIntakes || []) if (intake.status === 'running') { intake.status = 'failed'; intake.error = 'Server restarted; reserved credits refunded. Start a new source request.'; intake.errorCode = 'interrupted_request'; intake.completedAt = now(); }
+      for (const run of (state.assistantRuns || []).filter(run => run.status === 'running')) { run.status = 'failed'; run.error = 'Server restarted. No model request will be replayed automatically. Local credits were refunded; provider billing may differ.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); }
+    });
+  }
 }
 
 export function createStore(directory) {

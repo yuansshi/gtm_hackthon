@@ -82,6 +82,17 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   app.post(base + '/approve', (req, res) => { const p = parse(z.object({ acknowledged: z.boolean(), revision }).strict(), req.body); service.approveProfile(req.params.business, p.acknowledged, p.revision); view(req, res); });
   app.post(base + '/discovery', (req, res) => { const j = service.startDiscovery(req.params.business); res.status(202).json({ jobId: j.id }); });
+  app.post(base + '/source-intakes', (req, res) => {
+    const payload = parse(z.object({ requestId: z.string().uuid(), revision, urls: z.array(z.string().max(2000)).min(1).max(2) }).strict(), req.body);
+    const intake = service.startWebsiteIntake(req.params.business, payload);
+    res.status(202).json({ ...service.snapshot(req.params.business), activeSourceIntakeId: intake.id });
+  });
+  const evidenceQuote = z.object({ url: z.string().max(2000), text: z.string().min(12).max(600) }).strict();
+  app.post(base + '/source-intakes/:intake/review', async (req, res) => {
+    const payload = parse(z.object({ revision, acknowledged: z.boolean(), name: z.string().trim().min(1).max(200), industry: z.string().trim().min(1).max(200), location: z.string().trim().min(1).max(200), country: z.enum(['United States', 'Canada', 'Mexico', 'Other']), buyerType: z.enum(['OEM', 'Other']), productFamily: z.string().max(100), application: z.string().trim().min(1).max(500), reason: z.string().trim().min(1).max(1000), publicEmail: z.string().max(320).nullable(), quotes: z.object({ application: evidenceQuote, geography: evidenceQuote, organization: evidenceQuote }).strict() }).strict(), req.body);
+    res.json(await service.reviewWebsiteIntake(req.params.business, req.params.intake, payload));
+  });
+  app.post(base + '/source-intakes/:intake/dismiss', (req, res) => { parse(z.object({}).strict(), req.body); res.json(service.dismissWebsiteIntake(req.params.business, req.params.intake)); });
   app.patch(base + '/leads/:lead/selection', (req, res) => { const p = parse(z.object({ selected: z.boolean() }).strict(), req.body); service.selectLead(req.params.business, req.params.lead, p.selected); view(req, res); });
   app.post(base + '/leads/:lead/enrich', async (req, res) => { await service.enrich(req.params.business, req.params.lead); view(req, res); });
   app.post(base + '/leads/:lead/drafts', async (req, res) => { const p = parse(z.object({ channel: z.enum(['email', 'linkedin']), variant: z.enum(['A', 'B']), sequenceStep: z.number().int().min(0).max(2), generation: z.enum(['template', 'model']).optional(), requestId: z.string().uuid().optional(), acknowledgedExternalProcessing: z.boolean().optional(), revision: revision.optional() }).strict(), req.body); if (p.generation === 'model') { if (!p.requestId || p.revision === undefined) throw new AppError(400, 'Model drafting needs a request ID and current revision.', 'invalid_request'); return res.json(await service.draftWithModel(req.params.business, req.params.lead, p)); } const draftId = service.draft(req.params.business, req.params.lead, p.channel, p.variant, p.sequenceStep); res.json({ ...service.snapshot(req.params.business), activeDraftId: draftId }); });

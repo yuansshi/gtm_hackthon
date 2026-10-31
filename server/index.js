@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createStore } from './store.js';
+import { createStore, recoverInterruptedWork } from './store.js';
 import { createGraph } from './graph.js';
 import { createService } from './service.js';
 import { createApp } from './app.js';
@@ -9,11 +9,7 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.PROJECT_AC
 const directory = path.resolve(process.env.DATA_DIR || '.data');
 const store = createStore(directory);
 // Recover interrupted reservations on restart; jobs are never replayed as sends.
-for (const id of ['allco', 'huasheng']) {
-  for (const entry of store.read(id).wallet.ledger.filter(e => e.status === 'reserved')) store.settle(id, entry.id, false);
-  store.mutate(id, s => { for (const job of s.jobs.filter(j => j.status === 'running')) { job.status = 'failed'; job.error = 'Server restarted; reserved credits refunded. Run discovery again.'; } });
-  store.mutate(id, s => { for (const run of (s.assistantRuns || []).filter(r => r.status === 'running')) { run.status = 'failed'; run.error = 'Server restarted. No model request will be replayed automatically. Local credits were refunded; provider billing may differ.'; run.errorCode = 'interrupted_request'; } });
-}
+recoverInterruptedWork(store);
 const graph = await createGraph(directory);
 const service = createService({ store, graph });
 const app = createApp({ service, store, accessToken: process.env.PROJECT_ACCESS_TOKEN || '', ...(process.env.PUBLIC_ORIGIN ? { allowedOrigins: [process.env.PUBLIC_ORIGIN] } : {}) });

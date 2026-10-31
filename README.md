@@ -20,7 +20,7 @@ The supplied `.env.example` contains dummy Band and Flexprice placeholders. The 
 ## Try the five-module flow
 
 1. **Product & ICP:** review company products and capabilities; choose target industries, territory, roles, size criteria, classification, triggers, reference wins, and domain exclusions. A local guided intake recognizes explicit US/Canada/Mexico, OEM, employee-range, NAICS/SIC, and excluded-domain statements. Every proposal is persisted for accept/adjust/dismiss review; it cannot apply itself. Optional project-model intake uses strict structured output and the same review gate. Confirm the profile review and approve for research. Editing the profile revokes research and unsent-message approvals.
-2. **Discovery:** run source research (2 demo credits) over the curated collection of real US OEMs. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority.
+2. **Discovery:** run source research (2 demo credits) over curated and owner-admitted US OEMs, or choose **Research a website** to fetch up to two company pages (2 credits). Review exact company, manufacturer, US-location, and application evidence before adding a new account; it is not automatically shortlisted. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority.
 3. **Knowledge graph:** query the native Kuzu database (1 credit), inspect directional relationships and their evidence, and follow Person → Company → Product paths. The graph also retains published previous-employer relationships and local outreach events.
 4. **Outreach:** prepare email or LinkedIn drafts with A/B variants and day 0/3/7 follow-ups. Templates cite the account's application and this supplier's website. Edit, save, reject, or approve the exact version. Approval is bound on the server to business, profile, recipient, subject, body, channel, sequence step, and message version. Recording a dry run costs 1 credit and sends **nothing externally**. Duplicate sends are idempotent; both A/B variants cannot be dispatched to the same account/channel/step.
 5. **Pipeline:** move accounts through Matched, Contacted, Replied, Meeting booked, RFQ received, Engineering review, Quote sent, Trial / qualification, Closed won/lost. Counts use recorded events, with actor and timestamp. Dry-run messages and user-reported outcomes are identified separately. Segmented and A/B counts are descriptive observations.
@@ -33,7 +33,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | --- | --- |
 | Persistence | SQLite workspace transactions, revision checks, restart recovery for interrupted credit reservations |
 | Graph | Native Kuzu 0.11.3, parameterized Cypher, business-scoped nodes/edges, persistent multi-hop queries |
-| Research | Curated real companies + primary citations + live HTTP source checks; not open-ended prospect search |
+| Research | Curated companies and quoted-source website intake + live source retrieval; owner-reviewed admission beyond the fixed catalog; not autonomous prospect search |
 | Contact enrichment | Public general company addresses + DNS MX; no vendor or verified personal mailbox |
 | ICP confidence | Visible 0–1 coverage plus provenance for reviewed local/model suggestions; not calibrated probabilities |
 | Drafting | Source-grounded templates by default; optional credential-gated OpenAI structured drafts with required account/supplier citations, proposed claim review, and actual returned token usage |
@@ -50,7 +50,7 @@ No RFQ, buying intent, direct buyer email, certification, technical compatibilit
 
 Default binding is loopback. Binding `HOST=0.0.0.0` requires `PROJECT_ACCESS_TOKEN`; set `PUBLIC_ORIGIN` to the exact HTTPS deployment origin. The project token grants access to both business workspaces: this is a shared-project demo, **not** multi-user tenant authorization. Sessions expire after eight hours, use an HttpOnly SameSite cookie, and require CSRF tokens for writes. Put deployments behind HTTPS and persist `DATA_DIR` on a volume. Do not deploy with a dummy access token.
 
-A Dockerfile is supplied for a Linux Node 24 deployment with `/data` mounted. Docker build/deployment has not been verified on this machine because Docker is unavailable. Static-only hosting cannot run this backend. Sites is not enabled in the current workspace. Public application hosting is not configured. Source submission target: [yuansshi/gtm_hackthon](https://github.com/yuansshi/gtm_hackthon).
+A Dockerfile is supplied for a Linux Node 24 deployment with `/data` mounted. Docker build/deployment has not been verified on this machine because Docker is unavailable. Static-only hosting cannot run this backend. Public application hosting is not configured. Source submission target: [yuansshi/gtm_hackthon](https://github.com/yuansshi/gtm_hackthon).
 
 Kuzu 0.11.3 is deprecated/archived upstream. It satisfies the hackathon's native graph requirement and passes the included persistence test. Evaluate a maintained graph engine before production use. The `tar` override removes a vulnerable transitive installation dependency; npm audit currently reports no vulnerabilities. This does not substitute for Snyk results.
 
@@ -78,6 +78,8 @@ The GitHub workflow runs checks and Snyk source/dependency scans. Configure a pr
 - `server/store.js`, `server/graph.js`: transactional workspace store and native graph projection.
 - `src/Billing.jsx`, `server/billing.js`: credit balances, pack/custom reloads, receipts, usage history, limits and retry-safe reload IDs.
 - `server/catalog.js`, `server/evidence.js`: cited research collection, source checks, transparent scoring, DNS MX.
+- `src/WebsiteIntake.jsx`, `server/website-intake.js`, `server/public-source.js`: public website retrieval, quoted-source admission, persistent candidate collection, and stale-evidence review.
+- `server/review-policy.js`: shared account-context invalidation for editable unsent drafts.
 - `server/intake.js`, `server/model.js`: bounded local extraction and credential-gated structured model output.
 - `tests/workflow.test.js`, `tests/assistant.test.js`, `tests/billing.test.js`: workflow, native database, assistant-review, and real SDK contract tests with intercepted HTTP fixtures.
 - `docs/system-design.md`, `docs/rubric-status.md`, `docs/demo-script.md`, `docs/demo-narration.md`: submission preparation and remaining gaps.
@@ -121,3 +123,14 @@ Open **Pipeline → Analytics**. Industry, tier, stage, summary, and search filt
 Conversion rates use a shared recorded-contact cohort and outcomes after contact, while raw milestones retain incomplete histories. Sequence observations split channel, A/B variant, step, drafting method, and mode; a reply is attributed only with an explicit same-account draft reference. Use **Record outcome** for confirmed user-reported or demo feedback, notes, occurrence time, optional message linkage, and an existing published respondent. New outcome context clears unsent approvals and advances message versions for fresh HITL review. No provider reply feed is connected; quick stage edits without explicit message links remain unattributed. See [metric definitions and validation](docs/pipeline-analytics.md).
 
 See [Outcome reporting](docs/outcome-reporting.md) for retry-safe persistence, historical entries, message eligibility, approval invalidation, and graph projection behavior.
+
+
+## Add an account from its website
+
+Open **Accounts → Research a website** after approving the current profile. Enter a company product/about page and, optionally, a same-site contact page. The two-credit job retrieves bounded public HTTPS text without executing scripts or sending credentials. A failed or interrupted fetch refunds once; reopening the same request does not charge again. Close and resume from the website research queue.
+
+Review the retained text beside the account form. Use a company name present in the sources; copy exact manufacturer, geography, and application quotes and select their source pages. Choose a product family in this business’s approved campaign, enter the fit hypothesis, and optionally select a same-domain published email. Confirming **Add researched account** validates source membership and the campaign’s US/OEM/product/domain rules. Quote presence is not semantic verification. The resulting record is unshortlisted, with no invented people, unknown size/intent, unverified mailbox, and technical qualification still required.
+
+Accepted candidates persist and take part in subsequent source refreshes. Missing quotes, failed retrieval, or a removed selected email make evidence review required, deselect the account, block qualification/approval, and advance editable unsent draft versions. A successful fetch alone cannot clear that review requirement; fetch fresh pages and complete a new owner review. Sent receipts and historical stages stay intact. Admission is durable before graph projection; a pending graph refresh can be repaired without duplicating or charging for admission.
+
+Sources expire for admission after 24 hours. A changed profile requires fresh research; refresh the workspace after a revision conflict. Dismissal removes a pending intake from the queue but does not refund completed source work. Autonomous search and vendor contact verification remain unconnected. Protocol, DNS-pinning, state, and verification details are in [Website intake](docs/website-intake.md).
