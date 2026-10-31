@@ -1,3 +1,11 @@
+import { createBandProvider } from './band-provider.js';
+import { createLeadManagement } from './lead-management.js';
+import {commercialIntakeKey,outreachResearchBrief} from '../src/commercial-planning.js';
+import {intakeFieldValue} from '../src/intake-fields.js';
+import {validExpansionAdjustments} from '../src/expansion-review.js';
+import {capabilityIntakeKey,productDescriptionField} from '../src/product-intake.js';
+import { createBandCoordination } from './band-coordination.js';
+import { checkedMessageBrief, requireMessageBrief, messageBriefInstructions, briefTemplate } from './message-brief.js';
 import { randomUUID } from 'node:crypto';
 import { createResearchBrief, missingResearchFields, businessById } from '../src/businesses.js';
 import { researchCatalog, competitors, costs, pipelineStages } from './catalog.js';
@@ -6,22 +14,52 @@ import { checkMx, reviewCandidate } from './evidence.js';
 import { createModelProvider } from './model.js';
 import { localIntake, validIntakeValue } from './intake.js';
 import { billingSummary } from './billing.js';
+import { analyzePipeline } from '../src/pipeline-metrics.js';
+import { createOutcomeReporter, markOutcomeProjection } from './outcomes.js';
+import { createWebsiteIntake, reviewWebsiteCandidate, markWebsiteProjection } from './website-intake.js';
+import { readPublicSource } from './public-source.js';
+import { invalidateAccountDrafts, suppressedContact } from './review-policy.js';
+import { createCompetitorResearch, markCompetitorProjection } from './competitor-research.js';
+import { createBuyingEvidence, markBuyingProjection } from './buying-evidence.js';
+import { createHunterProvider } from './hunter.js';
+import { createProspectSearchProvider } from './prospect-search-provider.js';
+import { createProspectSearch } from './prospect-search.js';
+import { excludedDomains, matchesExcludedDomain } from '../src/prospect-plan.js';
+import { createContactEnrichment, mergeAccountPeople, markContactProjection, markCompanyProjection } from './contact-enrichment.js';
+import { createMarketSignals, markSignalProjection } from './market-signals.js';
+import { activeSignals, signalHold, signalFresh, signalContext } from '../src/market-signals.js';
+import { companyHoldReasons, reviewedCompanyContext, hqCorroborated, draftCompanyEvidenceCurrent } from '../src/company-evidence.js';
+import { createEducationResearch, markEducationProjection } from './education-research.js';
+import { createPeopleResearch, markPersonProjection } from './people-research.js';
+import { createFlexpriceBilling } from './flexprice-billing.js';
+import { createFlexpriceProvider } from './flexprice-provider.js';
+import { createSendgridProvider } from './sendgrid-provider.js';
+import { createEmailDelivery, messageHash, lockedDraftStatuses, markDeliveryProjection } from './email-delivery.js';
+import { graphContextKey } from '../src/graph-context.js';
+import { communicationStatus, requireCommunicationAllowed, requireAccountCommunication, communicationContext } from './communication-policy.js';
+import { createCommunicationControls } from './communication-controls.js';
 
-export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
+export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions','expansionAdjustments'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
 const findLead = (s, id) => { const lead = s.leads.find(l => l.id === id); if (!lead) throw new AppError(404, 'Account not found in this business.', 'lead_not_found'); return lead; };
 const findDraft = (s, id) => { const d = s.drafts.find(d => d.id === id); if (!d) throw new AppError(404, 'Draft not found in this business.', 'draft_not_found'); return d; };
 export function exclusionReason(lead, state) {
+  if (signalHold(lead)) return 'Accepted negative market evidence places this account on hold. Review or explicitly withdraw the signal before qualification or outreach.';
+  const companyReasons=companyHoldReasons(lead,state);if(companyReasons.length)return companyReasons.join(' ');
+  if (lead.evidenceNeedsReview) return 'Website evidence needs a new quoted-source review before qualification.';
   if (!/united states|\busa?\b/i.test(state.icp.regions) || lead.country !== 'United States') return 'Outside the currently supported US research collection.';
   if (!state.icp.segments.some(s => /OEM|manufacturer/i.test(s))) return 'The current research collection supports equipment OEM campaigns only.';
   if (!state.productFamilies.includes(lead.productFamily)) return 'Relevant product family is not selected in this campaign.';
-  const domains = (state.icp.excludedDomains || '').split(/[\s,;]+/).map(d => d.toLowerCase().replace(/^www\./, '')).filter(Boolean);
-  if (domains.includes(lead.domain.replace(/^www\./, ''))) return 'Excluded company domain in customer profile.';
+  const domains = excludedDomains(state.icp.excludedDomains);
+  if (matchesExcludedDomain(lead.domain.toLowerCase().replace(/^www\./, ''), domains)) return 'Excluded company domain in customer profile.';
   return null;
 }
-const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
+const requireEligible = (lead, state) => { requireAccountCommunication(state, lead); const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
+const accountContextDigest = lead => digest({ source: lead.source, sourceIntakeId: lead.sourceIntakeId, facts: lead.facts, application: lead.application, signal: lead.signal, marketSignals: signalContext(lead), company:reviewedCompanyContext(lead), people: lead.people, contact: lead.contact, outcomes: lead.events?.filter(event => event.recordType === 'outcome').map(event => event.id) });
+const requireFreshSignals = (draft, lead) => { for (const id of draft.linkedSignalIds || []) if (!signalFresh((lead.marketSignals || []).find(signal => signal.id === id) || {})) throw new AppError(409, 'Linked market evidence changed or expired. Refresh/review the source and prepare the draft again before approval or dispatch.', 'stale_market_signal'); };
+const requireFreshCompany = (draft,lead) => {if(!draftCompanyEvidenceCurrent(draft,lead))throw new AppError(409,'The company evidence used by this model draft changed or expired. Prepare a fresh draft from current reviewed HQ evidence before approval or dispatch.','stale_company_context');};
 
-export function metrics(state) {
+export function metrics(state, { asOf } = {}) {
   const reached = stage => state.leads.filter(l => l.events.some(e => e.stage === stage)).length;
   const contacted = reached('Contacted'); const replied = reached('Replied'); const meetings = reached('Meeting booked');
   const groups = new Map();
@@ -29,34 +67,51 @@ export function metrics(state) {
     const key = `${l.industry}|${l.fit.tier}`; const group = groups.get(key) || { industry: l.industry, tier: l.fit.tier, total: 0, contacted: 0, replied: 0, meetings: 0 };
     group.total++; if (l.events.some(e => e.stage === 'Contacted')) group.contacted++; if (l.events.some(e => e.stage === 'Replied')) group.replied++; if (l.events.some(e => e.stage === 'Meeting booked')) group.meetings++; groups.set(key, group);
   }
+  const analytics = analyzePipeline(state, { asOf });
   const experiments = ['A', 'B'].map(variant => {
-    const sent = state.drafts.filter(d => d.variant === variant && ['simulated', 'accepted'].includes(d.status));
-    const recipients = [...new Set(sent.map(d => d.leadId))];
-    const responses = recipients.filter(id => { const first = sent.filter(d => d.leadId === id).map(d => d.sentAt).sort()[0]; return state.leads.find(l => l.id === id)?.events.some(e => e.stage === 'Replied' && e.at >= first); }).length;
-    return { variant, sent: sent.length, recipients: recipients.length, responses, replyRate: recipients.length ? responses / recipients.length : null };
+    const groups = analytics.experiments.filter(group => group.variant === variant);
+    const drafts = [...new Map(state.drafts.filter(draft => groups.some(group => group.draftIds.includes(draft.id))).map(draft => [draft.id, draft])).values()];
+    const recipients = new Set(drafts.map(draft => draft.leadId));
+    const linkedReplies = new Set(analytics.records.filter(record => record.events.some(event => event.stage === 'Replied' && drafts.some(draft => draft.id === event.draftId && draft.leadId === record.id && Date.parse(event.at) >= Date.parse(draft.sentAt)))).map(record => record.id));
+    return { variant, sent: drafts.length, recipients: recipients.size, responses: linkedReplies.size, replyRate: recipients.size ? linkedReplies.size / recipients.size : null, attribution: 'Explicit same-account draft link only' };
   });
   return { accounts: state.leads.length, selected: state.leads.filter(l => l.selected).length, contacted, replied, meetings,
     qualifiedRfqs: reached('RFQ received'), quotes: reached('Quote sent'), won: reached('Closed won'),
-    replyRate: contacted ? replied / contacted : null, meetingRate: contacted ? meetings / contacted : null,
+    replyRate: analytics.reach.find(row => row.stage === 'Replied').rate, meetingRate: analytics.reach.find(row => row.stage === 'Meeting booked').rate,
     liveAccepted: state.drafts.filter(d => d.status === 'accepted').length, simulated: state.drafts.filter(d => d.status === 'simulated').length,
     stages: pipelineStages.map(stage => ({ stage, current: state.leads.filter(l => l.stage === stage).length, reached: reached(stage) })),
     segments: [...groups.values()], experiments,
-    caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. A/B comparisons are descriptive, not causal.' };
+    caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. Conversion rates use the same recorded-contact cohort and require outcomes after contact. A/B comparisons require explicit reply-to-draft links and are descriptive, not causal.' };
 }
 
-export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider() }) {
-  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource, hunter = createHunterProvider(), prospectProvider = createProspectSearchProvider(), flexpriceProvider = createFlexpriceProvider(), emailProvider = createSendgridProvider(), bandProvider = createBandProvider(), bandClock }) {
+  const flexpriceBilling = createFlexpriceBilling({ store, provider: flexpriceProvider });
+  const snapshot = id => { const s = store.read(id); return { ...s, leads: s.leads.map(lead => ({ ...lead, communicationStatus: { account: communicationStatus(s, lead, 'email', ''), email: communicationStatus(s, lead, 'email', lead.contact?.email), linkedin: communicationStatus(s, lead, 'linkedin', lead.contact?.linkedIn) } })), delivery: emailDelivery.view(s), band: bandCoordination.view(s), drafts: s.drafts.map(draft => ({ ...draft, livePreview: emailDelivery.preview(s, draft), communicationStatus: communicationStatus(s, s.leads.find(lead => lead.id === draft.leadId), draft.channel, draft.recipient) })), billing: billingSummary(s), flexprice: flexpriceBilling.view(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), prospectSearch: prospectProvider.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+  const communicationControls = createCommunicationControls({ store, snapshot });
+  const manageLead = createLeadManagement({store,snapshot});
+  const emailDelivery = createEmailDelivery({ store, graph, competitors, provider: emailProvider, snapshot, profileDigest, requireEligible, requireFreshSignals, requireFreshCompany, accountContextDigest, prepareBilling: flexpriceBilling.prepare });
+  const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
+  const prospectSearch = createProspectSearch({ store, provider: prospectProvider, readSource: readWebsiteSource, stageIntake: websiteIntake.stageSearchIntake, snapshot, profileDigest });
+  const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible, exclusionReason, readSource:readWebsiteSource });
+  const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
+  const marketSignals = createMarketSignals({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource, beforeStart: flexpriceBilling.prepare });
+  const peopleResearch = createPeopleResearch({ store, graph, competitors, snapshot, profileDigest, readSource: readWebsiteSource });
+  const educationResearch = createEducationResearch({ store, graph, competitors, snapshot, profileDigest, checkSources: peopleResearch.checkSources, markSourceProjection: markPersonProjection, readSource: readWebsiteSource });
+  const competitorResearch = createCompetitorResearch({ store, graph, competitors, snapshot, readSource: readWebsiteSource });
+  const buyingEvidence = createBuyingEvidence({ store, graph, competitors, snapshot, exclusionReason });
   const updateProfile = (s, incoming) => {
+    if(incoming.expansionAdjustments!==undefined&&!validExpansionAdjustments(businessById(s.businessId),incoming.expansionAdjustments))throw new AppError(400,'Adjust only this business’s suggested segments, with a bounded name and research rationale.','invalid_expansion_adjustment');
     const before = profileDigest(s);
-    const previousIcp = structuredClone(s.icp);
+    const previousValues = Object.fromEntries(Object.keys(s.assistantFieldProvenance||{}).map(field=>[field,structuredClone(intakeFieldValue(s,field))]));
     const supplierHash = value => digest({ company: value.company, products: value.productFamilies, capabilities: value.capabilities, commercial: value.commercial });
     const previousSupplier = supplierHash(s);
     for (const key of profileKeys) if (incoming[key] !== undefined) s[key] = incoming[key];
     if (before !== profileDigest(s)) {
       s.approved = false; s.approvedAt = null;
-      for (const draft of s.drafts) if (!['accepted', 'simulated', 'dispatching'].includes(draft.status)) { draft.approvedHash = null; draft.status = 'draft'; }
+      for (const link of s.buyingLinks || []) if (link.status === 'reviewed') { link.status = 'needs_review'; link.reviewReason = 'Business profile changed.'; }
+      for (const draft of s.drafts) if (!lockedDraftStatuses.includes(draft.status)) { draft.approvedHash = null; draft.status = 'draft'; }
       for (const lead of s.leads) { lead.excludedReason = exclusionReason(lead, s); if (lead.excludedReason) lead.selected = false; }
-      for (const field of Object.keys(s.assistantFieldProvenance || {})) if (JSON.stringify(previousIcp[field]) !== JSON.stringify(s.icp[field]) || (s.assistantFieldProvenance[field].basis === 'catalog_hypothesis' && previousSupplier !== supplierHash(s))) delete s.assistantFieldProvenance[field];
+      for (const field of Object.keys(s.assistantFieldProvenance || {})) if (JSON.stringify(previousValues[field]) !== JSON.stringify(intakeFieldValue(s,field)) || (s.assistantFieldProvenance[field].basis === 'catalog_hypothesis' && previousSupplier !== supplierHash(s))) delete s.assistantFieldProvenance[field];
       addActivity(s, 'Profile updated', 'Research and unsent-message approvals cleared because campaign context changed.');
     }
     s.profileImported = true;
@@ -101,7 +156,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const { initial, run } = started;
     let generated;
     try {
-      generated = mode === 'local' ? { value: localIntake(message), metadata: { provider: 'Local rules', usage: null } } : await model.intake({ message, profile: createResearchBrief(initial), sources: businessById(id).sources, requestId });
+      generated = mode === 'local' ? { value: localIntake(message,id), metadata: { provider: 'Local rules', usage: null } } : await model.intake({ message, profile: createResearchBrief(initial), sources: businessById(id).sources, requestId });
       finishAssistant(id, run, generated.value, generated.metadata);
       return { ...snapshot(id), activeAssistantRunId: run.id };
     } catch (error) { error.providerUsage ||= generated?.metadata?.usage; failAssistant(id, run, error); throw error; }
@@ -113,18 +168,23 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       if (!run || run.status !== 'completed') throw new AppError(404, 'Completed intake proposal not found in this business.', 'proposal_not_found');
       if (run.reviewedAt) throw new AppError(409, 'This proposal has already been reviewed.', 'proposal_already_reviewed');
       if (profileDigest(s) !== run.profileHash) throw new AppError(409, 'The profile changed. Request a new proposal before applying suggestions.', 'stale_assistant_context');
-      const fields = new Set(); const icp = { ...s.icp }; const accepted = [];
+      const fields = new Set(); const icp = { ...s.icp }; const commercial={...s.commercial}; const company={...s.company}; const capabilities=structuredClone(s.capabilities); const accepted = [];
       for (const d of decisions) {
         const suggestion = run.result.suggestions.find(p => p.field === d.field);
         if (!suggestion || fields.has(d.field)) throw new AppError(400, 'Review only unique fields from this proposal.', 'invalid_proposal_field');
         fields.add(d.field);
         if (d.decision === 'dismissed') continue;
         const value = d.decision === 'accepted' ? suggestion.value : d.value;
-        if (!validIntakeValue(d.field, value)) throw new AppError(400, 'An adjusted field has an invalid value.', 'invalid_proposal_value');
-        icp[d.field] = value; accepted.push({ ...suggestion, value, decision: d.decision });
+        if (!validIntakeValue(d.field, value,id)) throw new AppError(400, 'An adjusted field has an invalid value.', 'invalid_proposal_value');
+        const key=commercialIntakeKey(d.field),capability=capabilityIntakeKey(d.field);
+        if(key)commercial[key]=value;
+        else if(d.field===productDescriptionField)company.description=value;
+        else if(capability)capabilities[capability]={value,status:'unknown'};
+        else icp[d.field] = value;
+        accepted.push({ ...suggestion, value, decision: d.decision });
       }
       if (fields.size !== run.result.suggestions.length) throw new AppError(400, 'Accept, adjust, or dismiss every suggested field.', 'incomplete_proposal_review');
-      updateProfile(s, { icp }); s.assistantFieldProvenance ||= {};
+      updateProfile(s, { icp,commercial,company,capabilities }); s.assistantFieldProvenance ||= {};
       for (const field of accepted) s.assistantFieldProvenance[field.field] = { ...field, confidence: field.decision === 'adjusted' ? 1 : field.confidence, basis: field.decision === 'adjusted' ? 'Owner-adjusted target' : field.basis, method: run.mode === 'model' ? 'Uncalibrated model suggestion reviewed by owner' : 'Explicit local extraction reviewed by owner', runId, reviewedAt: now() };
       run.decisions = decisions; run.reviewedAt = now(); run.acceptedFields = accepted.map(f => f.field);
       addActivity(s, 'ICP suggestions reviewed', `${accepted.length} accepted or adjusted; ${decisions.length - accepted.length} dismissed. Any profile changes revoke prior research and unsent-message approvals.`, 'You');
@@ -150,23 +210,28 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const completion = (async () => {
       try {
         step('Planner', `Scope: ${initial.company.name}; ${initial.icp.regions}; ${initial.icp.segments.join(', ')}. Only this business’s sources and contacts will be used.`);
-        let candidates = researchCatalog.filter(c => c.businesses.includes(id));
+        let candidates = [...researchCatalog.filter(c => c.businesses.includes(id)), ...(initial.customCandidates || [])];
         const excluded = [];
         candidates = candidates.filter(c => {
-          const reason = exclusionReason(c, initial);
+          const reason = exclusionReason(c.customEvidence ? { ...c, evidenceNeedsReview: false } : c, initial);
           if (reason) excluded.push({ name: c.name, reason }); return !reason;
         });
         step('Builder', `Fetching up to ${candidates.length} real candidate accounts. These are research starting points; no RFQ or supplier opening is assumed.`);
         const results = [];
-        for (const candidate of candidates) results.push(await review(candidate, initial));
+        for (const candidate of candidates) results.push(candidate.customEvidence ? await reviewWebsiteCandidate(candidate, initial, readWebsiteSource) : await review(candidate, initial));
         step('Reviewer', `${results.length} candidates have inline primary sources. Company size, named buying authority, mailbox deliverability, and purchase intent remain unknown unless separately verified.`);
-        step('Security reviewer', 'Allowlisted HTTPS sources only. Private destinations, unsupported redirects, and oversized pages are blocked. No outbound message was queued.');
+        step('Security reviewer', 'Curated and reviewer-registered HTTPS sources only. Website intakes pin validated public addresses. Private destinations, unsupported redirects, and oversized pages are blocked. No outbound message was queued.');
         store.mutate(id, s => {
           if (!s.approved || profileDigest(s) !== job.profileHash) throw new AppError(409, 'Profile changed while research was running. Results were not applied.', 'stale_research');
-          for (const lead of results) {
+          for (const {management:untrustedManagement,owner:untrustedOwner,...lead} of results) {
             const existing = s.leads.find(l => l.id === lead.id);
-            if (existing) Object.assign(existing, lead, { excludedReason: null, selected: existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact });
-            else s.leads.push(lead);
+            if (existing) {
+              const newlyStale = lead.customEvidence && lead.evidenceNeedsReview && !existing.evidenceNeedsReview;
+              const preserved = { selected: lead.evidenceNeedsReview ? false : existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact, management: existing.management, owner: existing.owner };
+              Object.assign(existing, lead, preserved, { people: mergeAccountPeople(lead.people, existing.vendorPeople), excludedReason: exclusionReason({ ...lead, marketSignals: existing.marketSignals, companyProfile:existing.companyProfile }, s) });
+              if (newlyStale) invalidateAccountDrafts(s, existing.id, { reason: 'account_source_changed', intakeId: lead.sourceIntakeId });
+            } else s.leads.push({ ...lead, excludedReason: exclusionReason(lead, s) });
+            if (lead.customEvidence && lead.evidenceNeedsReview) { const candidate = s.customCandidates?.find(item => item.id === lead.id); if (candidate) candidate.evidenceNeedsReview = true; }
           }
           const j = s.jobs.find(x => x.id === job.id); j.status = 'completed'; j.completedAt = now(); j.excluded = excluded;
           addActivity(s, 'Discovery completed', `${results.length} real accounts reviewed. ${excluded.length} excluded by geography / collection scope.`, 'Research agent');
@@ -188,57 +253,81 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const initial = store.read(id); const lead = findLead(initial, leadId);
     requireEligible(lead, initial);
     if (!initial.approved) throw new AppError(409, 'Customer profile approval is required.', 'profile_approval_required');
+    const email = lead.contact?.email || lead.publicEmail;
+    if (suppressedContact(initial, email)) throw new AppError(409, 'Processing of this address is restricted.', 'contact_suppressed');
+    const policyContext = communicationContext(initial);
     const reservation = store.reserve(id, 'enrichment', costs.enrichment, leadId);
     try {
-      const result = lead.publicEmail ? await mx(lead.publicEmail) : { status: 'not_available', records: [] };
+      const result = email ? await mx(email) : { status: 'not_available', records: [] };
       store.mutate(id, s => {
         const current = findLead(s, leadId);
-        current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: 'unverified', verificationProvider: 'Public source + DNS MX', enrichmentNote: 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
-        addActivity(s, 'Contact research checked', `${lead.name}: ${lead.publicEmail ? 'published company address; MX ' + result.status : 'no public email established'}. Mailbox remains unverified.`, 'Enrichment agent');
+        requireEligible(current, s);
+        if (suppressedContact(s, email) || communicationContext(s) !== policyContext) throw new AppError(409, 'Communication preferences changed during the contact check. Start a fresh check.', 'stale_communication_context');
+        if (!s.approved || profileDigest(s) !== profileDigest(initial) || (current.contact?.email || current.publicEmail) !== email || current.sourceIntakeId !== lead.sourceIntakeId) throw new AppError(409, 'Account or profile evidence changed during the contact check. Check it again.', 'stale_account_context');
+        current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: current.contact.mailboxStatus || 'unverified', mxVerificationProvider: 'DNS MX', verificationProvider: current.contact.verificationProvider || 'Public source + DNS MX', enrichmentNote: current.contact.provenance === 'hunter_reviewed' ? 'This updates DNS routing only. Hunter checks retain their original provider date; routing does not establish inbox delivery or buying authority.' : 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
+        addActivity(s, 'Contact research checked', `${lead.name}: ${email ? 'selected company address; MX ' + result.status : 'no public email established'}. This DNS check does not establish mailbox deliverability or buyer authority.`, 'Enrichment agent');
       });
       store.settle(id, reservation, true); return snapshot(id);
     } catch (error) { store.settle(id, reservation, false); throw error; }
   };
 
-  const draft = (id, leadId, channel = 'email', variant = 'A', sequenceStep = 0) => store.mutate(id, s => {
+  const draft = (id, leadId, channel = 'email', variant = 'A', sequenceStep = 0, messageBrief) => store.mutate(id, s => {
     if (!s.approved) throw new AppError(409, 'Approve the current profile before drafting.', 'profile_approval_required');
     const lead = findLead(s, leadId); if (!lead.selected) throw new AppError(409, 'Shortlist the account first.', 'shortlist_required');
     requireEligible(lead, s);
+    requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
     const existing = s.drafts.find(d => !d.modelMetadata && d.leadId === leadId && d.channel === channel && d.variant === variant && d.sequenceStep === sequenceStep && d.profileHash === profileDigest(s));
-    if (existing) return existing.id;
+    const brief = checkedMessageBrief(messageBrief === undefined ? existing?.messageBrief : messageBrief);
+    const currentSignalHash = digest({ context: signalContext(lead), usableIds: activeSignals(lead).map(signal=>signal.id) });
+    if (existing && (lockedDraftStatuses.includes(existing.status) || digest(existing.messageBrief || null) === digest(brief || null) && (existing.signalContextHash === currentSignalHash || (!existing.signalContextHash && !signalContext(lead).length)))) return existing.id;
     const product = id === 'allco' ? 'custom hydraulic cylinders' : 'wear-resistant castings';
     const greeting = `Hello ${lead.name} engineering and sourcing team,`;
     const value = variant === 'A' ? `I saw your ${lead.application.toLowerCase()} portfolio [1]. ${s.company.name} supplies ${product} [2].` : `Could you help us understand your supplier qualification process for ${product}? Your ${lead.application.toLowerCase()} portfolio appears relevant to our initial research [1].`;
     const ask = 'If there is a suitable application, could we review your qualification requirements and, where appropriate, a drawing, specification, and expected quantity?';
     const caveat = 'Any compatibility, pricing, and delivery proposal would follow technical review.';
-    const body = channel === 'linkedin' ? `${greeting}\n\n${value}\n\n${sequenceStep ? 'Following up on the introduction below. ' : ''}${ask}\n\n${caveat}` : `${greeting}\n\n${sequenceStep ? 'Following up on our supplier introduction.\n\n' : ''}${value}\n\n${ask}\n\n${caveat}\n\nBest,\n${s.company.name}\n\n[1] ${lead.source}\n[2] ${s.company.website}`;
+    const signals = activeSignals(lead).slice(0, 2);
+    const trigger = signals.map((signal,index) => `Your company published on ${signal.eventDate}: “${signal.quote}” [${index+3}]. This is context for qualification; current sourcing demand is unconfirmed.`).join('\n\n');
+    const body = channel === 'linkedin' ? `${greeting}\n\n${value}${trigger?'\n\n'+trigger:''}\n\n${sequenceStep ? 'Following up on the introduction below. ' : ''}${ask}\n\n${caveat}` : `${greeting}\n\n${sequenceStep ? 'Following up on our supplier introduction.\n\n' : ''}${value}${trigger?'\n\n'+trigger:''}\n\n${ask}\n\n${caveat}\n\nBest,\n${s.company.name}\n\n[1] ${lead.source}\n[2] ${s.company.website}${signals.map((signal,index)=>'\n['+(index+3)+'] '+signal.source).join('')}`;
+    const tailored = brief ? briefTemplate({ state: s, lead, channel, variant, sequenceStep, signals, brief, product }) : null;
     const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep],
       recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
-      subject: `${sequenceStep ? 'Follow-up: ' : ''}${product} — supplier qualification`, body,
+      subject: tailored?.subject || `${sequenceStep ? 'Follow-up: ' : ''}${product} — supplier qualification`, body: tailored?.body || body, messageBrief: brief, approvedAt: null, approvedDeliveryMode: null, approvedSenderHash: null, approvedLiveMessage: null,
       profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(),
-      generation: 'Source-grounded template; no model used', sources: [lead.source, s.company.website], actor: 'Drafting agent' };
-    s.drafts.unshift(d); addActivity(s, 'Outreach draft prepared', `${lead.name}; ${channel}; variant ${variant}; step ${sequenceStep + 1}. Human review required.`, 'Drafting agent'); return d.id;
+      generation: 'Source-grounded template; no model used', sources: [...new Set([lead.source, s.company.website, ...signals.map(signal=>signal.source), ...(lead.contact.sources || []).map(source => source.url)])], linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: currentSignalHash, actor: 'Drafting agent' };
+    if(existing)Object.assign(existing,d,{id:existing.id,version:(existing.version||1)+1});else s.drafts.unshift(d); addActivity(s, 'Outreach draft prepared', `${lead.name}; ${channel}; variant ${variant}; step ${sequenceStep + 1}. Human review required.`, 'Drafting agent'); return existing?.id||d.id;
   }).result;
 
-  const draftWithModel = async (id, leadId, { channel = 'email', variant = 'A', sequenceStep = 0, requestId, acknowledgedExternalProcessing = false, revision }) => {
+  const draftWithModel = async (id, leadId, { channel = 'email', variant = 'A', sequenceStep = 0, requestId, acknowledgedExternalProcessing = false, revision, messageBrief, beforeApply }) => {
+    const brief = checkedMessageBrief(messageBrief);
     if (!acknowledgedExternalProcessing) throw new AppError(400, 'Confirm sending the supplier profile and this account’s public evidence to the project model.', 'external_processing_review_required');
     const before = store.read(id); const account = findLead(before, leadId);
+    const accountHash = accountContextDigest(account);
+    const policyContext = communicationContext(before);
     if (!before.approved || !account.selected) throw new AppError(409, 'Approve the profile and shortlist this account first.', 'profile_approval_required');
     requireEligible(account, before);
-    const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep }, 'model', revision);
+    requireCommunicationAllowed(before, account, channel, channel === 'email' ? account.contact?.email : account.contact?.linkedIn);
+    const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep, ...(brief ? { messageBrief: brief } : {}) }, 'model', revision);
     if (started.previous) return { ...snapshot(id), activeDraftId: started.previous.draftId };
     const { initial, run } = started;
     let generated;
     try {
-      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...account.people.map(p => p.source), initial.company.website])];
-      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep };
+      const signals=activeSignals(account);
+      const hq=account.companyProfile?.status==='reviewed'?account.companyProfile.fields.headquarters:null;
+      const companyHeadquarters=hqCorroborated(hq)?{city:hq.city,country:hq.country,quote:hq.corroboration.text,sourceUrl:hq.corroboration.url,qualification:'Owner-reviewed company-source HQ city/country only; other address components, firmographics and buying intent remain unverified.'}:null;
+      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...signals.map(signal=>signal.source), ...(companyHeadquarters?[companyHeadquarters.sourceUrl]:[]), ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
+      const context = { supplier: outreachResearchBrief(createResearchBrief(initial)), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep, ...(brief ? { messageBrief: messageBriefInstructions(brief) } : {}) };
       generated = await model.draft({ context, sources, requestId });
+      requireMessageBrief({ ...generated.value, messageBrief: brief }, true);
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {
+        beforeApply?.(s);
         const lead = findLead(s, leadId); requireEligible(lead, s);
+        requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
+        if (communicationContext(s) !== policyContext) throw new AppError(409, 'Communication preferences changed during generation. Prepare a fresh draft.', 'stale_communication_context');
+        if (accountContextDigest(lead) !== accountHash) throw new AppError(409, 'Account evidence changed during generation. Review the new context and request a fresh draft.', 'stale_account_context');
         if (!s.approved || !lead.selected) throw new AppError(409, 'Account or profile approval changed during generation.', 'stale_assistant_context');
         const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep], recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
-          subject: generated.value.subject, body: generated.value.body, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
-          profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(), generation: `OpenAI / ${generated.metadata.model}; human review required`, sources: [...new Set(generated.value.claims.map(c => c.sourceUrl))], actor: 'Model drafting agent', modelMetadata: generated.metadata, assistantRunId: run.id };
+          subject: generated.value.subject, body: generated.value.body, messageBrief: brief, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
+          profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(), linkedCompanyReviewId:companyHeadquarters?account.companyProfile.id:null, linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: digest({context:signalContext(lead),usableIds:activeSignals(lead).map(signal=>signal.id)}), generation: `OpenAI / ${generated.metadata.model}; human review required`, sources: [...new Set(generated.value.claims.map(c => c.sourceUrl))], actor: 'Model drafting agent', modelMetadata: generated.metadata, assistantRunId: run.id };
         s.drafts.unshift(d); currentRun.draftId = d.id;
       });
       return { ...snapshot(id), activeDraftId: store.read(id).assistantRuns.find(r => r.id === run.id).draftId };
@@ -248,35 +337,49 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   const editDraft = (id, draftId, patch, expectedVersion) => store.mutate(id, s => {
     const d = findDraft(s, draftId);
     if (expectedVersion !== undefined && d.version !== expectedVersion) throw new AppError(409, 'This draft changed in another session. Reload it before editing.', 'stale_draft');
-    if (['accepted', 'simulated', 'dispatching', 'delivery_unknown'].includes(d.status)) throw new AppError(409, 'A dispatched or uncertain-delivery message is immutable.', 'draft_locked');
+    if (lockedDraftStatuses.includes(d.status)) throw new AppError(409, 'A dispatched or uncertain-delivery message is immutable.', 'draft_locked');
     for (const key of ['body', 'subject', 'recipient']) if (patch[key] !== undefined) d[key] = patch[key];
-    d.version++; d.approvedHash = null; d.status = 'draft'; d.approvedAt = null;
+    if (patch.messageBrief !== undefined) d.messageBrief = checkedMessageBrief(patch.messageBrief);
+    d.version++; d.approvedHash = null; d.status = 'draft'; d.approvedAt = null; d.approvedDeliveryMode = null; d.approvedSenderHash = null; d.approvedLiveMessage = null;
     addActivity(s, 'Draft edited', 'Previous approval revoked. Review the exact recipient, subject, and message again.');
   }).state;
-  const messageHash = d => digest({ body: d.body, subject: d.subject, recipient: d.recipient, version: d.version, profileHash: d.profileHash, businessId: d.businessId, channel: d.channel, sequenceStep: d.sequenceStep });
-  const approveDraft = (id, draftId, acknowledged, version) => store.mutate(id, s => {
+
+  const approveDraft = (id, draftId, acknowledged, version, deliveryMode = 'dry_run') => store.mutate(id, s => {
     const d = findDraft(s, draftId);
     if (!acknowledged || d.version !== version) throw new AppError(409, 'Review the current draft version before approval.', 'stale_draft');
     if (!s.approved || d.profileHash !== profileDigest(s)) throw new AppError(409, 'Draft context changed. Generate a draft from the approved profile.', 'stale_profile');
     if (d.status !== 'draft' && d.status !== 'rejected') throw new AppError(409, 'Only an editable draft can be approved.', 'draft_locked');
+    requireEligible(findLead(s, d.leadId), s);
+    requireFreshSignals(d, findLead(s, d.leadId));
+    requireFreshCompany(d, findLead(s,d.leadId));
+    requireCommunicationAllowed(s, findLead(s, d.leadId), d.channel, d.recipient);
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
+    requireMessageBrief(d);
+    if (!['dry_run', 'live'].includes(deliveryMode)) throw new AppError(400, 'Choose dry run or live email approval.', 'invalid_delivery_mode');
+    Object.assign(d, deliveryMode === 'live' ? emailDelivery.approval(s, d) : { approvedDeliveryMode: 'dry_run', approvedSenderHash: null, approvedLiveMessage: null });
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
-    addActivity(s, 'Exact message approved', `Recipient, subject, content, channel, and version ${d.version} recorded for ${findLead(s, d.leadId).name}.`, 'You', { draftId });
+    addActivity(s, 'Exact message approved', `Recipient, subject, content, channel, and version ${d.version} (${deliveryMode === 'live' ? 'live email, including sender and footer' : 'dry run only'}) recorded for ${findLead(s, d.leadId).name}.`, 'You', { draftId });
   }).state;
-  const rejectDraft = (id, draftId) => store.mutate(id, s => { const d = findDraft(s, draftId); if (['accepted', 'simulated', 'dispatching'].includes(d.status)) throw new AppError(409, 'Dispatched messages cannot be rejected.', 'draft_locked'); d.status = 'rejected'; d.approvedHash = null; addActivity(s, 'Draft rejected', `Outreach to ${findLead(s, d.leadId).name} remains unsent.`, 'You'); }).state;
+  const rejectDraft = (id, draftId) => store.mutate(id, s => { const d = findDraft(s, draftId); if (lockedDraftStatuses.includes(d.status)) throw new AppError(409, 'Dispatched messages cannot be rejected.', 'draft_locked'); d.status = 'rejected'; d.approvedHash = null; addActivity(s, 'Draft rejected', `Outreach to ${findLead(s, d.leadId).name} remains unsent.`, 'You'); }).state;
 
   const simulateSend = async (id, draftId) => {
     const result = store.mutate(id, s => {
       const d = findDraft(s, draftId);
       if (d.status === 'simulated') return d.id; // idempotent: no duplicate charge or send
+      if (d.approvedDeliveryMode === 'live') throw new AppError(409, 'This approval is for live email. Revoke it and approve a dry run first.', 'approval_mode_mismatch');
       if (d.status !== 'approved' || !d.approvedHash || d.approvedHash !== messageHash(d)) throw new AppError(409, 'A valid human approval of this exact message is required.', 'approval_required');
       if (!s.approved || d.profileHash !== profileDigest(s)) throw new AppError(409, 'The approved campaign context is stale.', 'stale_profile');
       if (!d.recipient.trim()) throw new AppError(400, 'A recipient is required, even for a dry run. Do not invent an email or LinkedIn profile.', 'recipient_required');
-      if (s.drafts.some(other => other.id !== d.id && other.leadId === d.leadId && other.channel === d.channel && other.sequenceStep === d.sequenceStep && ['simulated', 'accepted'].includes(other.status))) throw new AppError(409, 'A variant for this account, channel, and step has already been dispatched.', 'variant_already_sent');
+      if (s.drafts.some(other => other.id !== d.id && other.leadId === d.leadId && other.channel === d.channel && other.sequenceStep === d.sequenceStep && lockedDraftStatuses.includes(other.status))) throw new AppError(409, 'A variant for this account, channel, and step has already been dispatched.', 'variant_already_sent');
+      requireMessageBrief(d);
       if (s.wallet.credits < costs.outreach) throw new AppError(402, 'Insufficient credits. No message was dispatched.', 'insufficient_credits');
       const lead = findLead(s, d.leadId);
       requireEligible(lead, s);
-      s.wallet.credits -= costs.outreach; s.wallet.ledger.unshift({ id: randomUUID(), kind: 'outreach', leadId: lead.id, credits: costs.outreach, status: 'consumed', externalStatus: 'not_connected', mode: 'dry_run', at: now() });
+      requireFreshSignals(d, lead);
+      requireFreshCompany(d,lead);
+      requireCommunicationAllowed(s, findLead(s, d.leadId), d.channel, d.recipient);
+      const usage = store.meterSettledUsage(s, { id: randomUUID(), kind: 'outreach', leadId: lead.id, credits: costs.outreach, status: 'consumed', externalStatus: 'not_connected', mode: 'dry_run', at: now() });
+      s.wallet.credits -= costs.outreach; s.wallet.ledger.unshift(usage);
       d.status = 'simulated'; d.sentAt = now(); d.deliveryMode = 'dry_run'; d.deliveryId = randomUUID();
       if (lead.stage === 'Matched') lead.stage = 'Contacted';
       lead.events.push({ stage: 'Contacted', at: now(), actor: 'Outreach agent', approvedBy: 'You', mode: 'dry_run', draftId });
@@ -293,8 +396,9 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   }).state;
   const graphView = async id => {
     const reservation = store.reserve(id, 'graph_query', costs.graph_query);
-    try { const state = store.read(id); await graph.sync(state, competitors[id]); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
+    try { const state = store.read(id); const contextKey = graphContextKey(state,competitors[id]); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); markCompanyProjection(store, id, state); markSignalProjection(store, id, state); markPersonProjection(store, id, state); markEducationProjection(store, id, state); markDeliveryProjection(store, id, state); markCompetitorProjection(store, id, state); markBuyingProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); const marketPaths = graph.marketPaths ? await graph.marketPaths(id) : []; const warmPaths = graph.warmPaths ? await graph.warmPaths(id) : []; const educationPaths = graph.educationPaths ? await graph.educationPaths(id) : []; const buyingPaths = graph.buyingPaths ? await graph.buyingPaths(id) : { evaluations: [], displacements: [] }; if (contextKey !== graphContextKey(store.read(id),competitors[id])) throw new AppError(409,'Graph evidence changed during the query. Refresh before using this snapshot.','stale_graph_context'); store.settle(id, reservation, true); return { ...data, paths, marketPaths, warmPaths, educationPaths, buyingPaths, contextKey, queriedAt: now(), contextRevision: store.read(id).revision }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, graphView, assistantStatus: () => model.status() };
+  const bandCoordination = createBandCoordination({ store, provider: bandProvider, snapshot, profileDigest, accountContextDigest, requireEligible, requireCommunicationAllowed, createTemplate: draft, createModelDraft: draftWithModel, prepareBilling: flexpriceBilling.prepare, modelStatus: model.status, ...(bandClock ? { clock: bandClock } : {}) });
+  return { manageLead, bandStatus: bandCoordination.status, planBandDraft: bandCoordination.plan, checkBandTeam: bandCoordination.check, connectBandTeam: bandCoordination.connect, pauseBandTeam: bandCoordination.pause, abandonBandRun: bandCoordination.abandon, startBandDraft: bandCoordination.start, stopBand: bandCoordination.stop, drainBand: bandCoordination.drain, checkEmailSender: emailDelivery.checkSender, confirmEmailSender: emailDelivery.confirmSender, sendEmail: emailDelivery.send, receiveEmailEvents: emailDelivery.events, deliveryStatus: () => { const views = ['allco', 'huasheng'].map(id => emailDelivery.view(store.read(id))); const active = views.find(view => view.available); return { ...emailDelivery.status(), connected: !!active, verifiedAt: active?.sender?.checkedAt || null }; }, startEducationResearch: educationResearch.start, reviewEducation: educationResearch.review, withdrawEducation: educationResearch.withdraw, dismissEducationResearch: educationResearch.dismiss, holdCommunication: communicationControls.hold, releaseCommunication: communicationControls.release, prepareBilling: flexpriceBilling.prepare, tickBilling: flexpriceBilling.tick, drainBilling: flexpriceBilling.drain, billingStatus: () => { const views = ['allco','huasheng'].map(id => flexpriceBilling.view(store.read(id))); const active = views.find(view => view.enabled && view.wallet); return { configured: views.some(view => view.configured), connected: !!active, verifiedAt: active?.wallet?.checkedAt || null, status: active ? 'Project wallet checked; usage status in Billing' : views.some(view => view.configured) ? 'Confirmation required in Billing' : 'Not configured' }; }, connectBilling: async (id,input) => { await flexpriceBilling.connect(id,input); return snapshot(id); }, pauseBilling: (id,input) => { flexpriceBilling.pause(id,input); return snapshot(id); }, syncBilling: async (id,input) => { await flexpriceBilling.sync(id,input); return snapshot(id); }, reviewBuyingLink: buyingEvidence.review, withdrawBuyingLink: buyingEvidence.withdraw, startCompetitorResearch: competitorResearch.start, reviewCompetitor: competitorResearch.review, withdrawCompetitor: competitorResearch.withdraw, dismissCompetitorResearch: competitorResearch.dismiss, startPeopleResearch: peopleResearch.start, reviewPerson: peopleResearch.review, withdrawPerson: peopleResearch.withdraw, attestConnection: peopleResearch.connection, revokeConnection: peopleResearch.revoke, dismissPeopleResearch: peopleResearch.dismiss, snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, configureSignalMonitor: marketSignals.configure, startSignalCheck: marketSignals.start, reviewMarketSignal: marketSignals.review, tickSignals: marketSignals.tick, drainSignals: marketSignals.drain, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), lookupCompany:contactEnrichment.company, applyCompany:contactEnrichment.applyCompany, withdrawCompany:contactEnrichment.withdrawCompany, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
 }

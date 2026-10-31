@@ -1,0 +1,224 @@
+{
+  "duration": 174.0,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "voice": "af_heart",
+  "sourceCommit": "05a95ec305dc92bc0fe785b8e52cdef9b12547cf",
+  "editedUiCaptures": true,
+  "externalDelivery": false,
+  "chapters": [
+    {
+      "start": 0,
+      "end": 15.25,
+      "title": "One industrial sales workspace"
+    },
+    {
+      "start": 15.25,
+      "end": 40.25,
+      "title": "01 / Product and buyer intake"
+    },
+    {
+      "start": 40.25,
+      "end": 62.75,
+      "title": "02 / Source-backed account matching"
+    },
+    {
+      "start": 62.75,
+      "end": 83.25,
+      "title": "03 / Native graph relationships"
+    },
+    {
+      "start": 83.25,
+      "end": 106.25,
+      "title": "04 / Context-driven composition"
+    },
+    {
+      "start": 106.25,
+      "end": 128.5,
+      "title": "Required checkpoint / Human review"
+    },
+    {
+      "start": 128.5,
+      "end": 151.0,
+      "title": "05 / Synchronized pipeline and attribution"
+    },
+    {
+      "start": 151.0,
+      "end": 174.0,
+      "title": "Context preserved, decisions accountable"
+    }
+  ],
+  "captions": 40,
+  "videoSha256": "37c426128e4c35f7554eb822a2b3484c909baec48f6d053a7032390cc7d5c476",
+  "frames": [
+    {
+      "name": "01-overview-allco",
+      "sha256": "9c0842882a4a03f0028743c2cf4e0bde988fc6ce77b73ad4a9d6aed0d1cbccec"
+    },
+    {
+      "name": "02-workspace-huasheng",
+      "sha256": "96bd32a79cb5bbde7ebc8f48f410896feacb499c39969fc4f5d875331d9a133a"
+    },
+    {
+      "name": "03-intake-empty",
+      "sha256": "b02f4d3a1f8c17f940c9ebaf13b43e725c3fb7fe2223438703fd2b4a1d636662"
+    },
+    {
+      "name": "04-intake-entered",
+      "sha256": "0763d27cf98197793ee4b7cf4acf68d262094b1f09fac8240204b4cabed7edcd"
+    },
+    {
+      "name": "05-intake-proposals",
+      "sha256": "5667f0bdb3896e4d9fc535d599162bc77be2cb74eaf194f5ca37be3ad3fff682"
+    },
+    {
+      "name": "06-intake-human-adjustment",
+      "sha256": "1d3e9ed1572b3702cab5629c5d0581349f58d3063f6b095bceab50c98195f9c0"
+    },
+    {
+      "name": "07-capabilities-unconfirmed",
+      "sha256": "c137e4e17b73b513a3e8dbf6f80e222d8fecf155e621a48c342b207f71fe6e4c"
+    },
+    {
+      "name": "08-persona-targets",
+      "sha256": "1acbd7a156d224a6f62e1db3b5f20af5d955d8e3eaea7d1ce792e8ba83c78929"
+    },
+    {
+      "name": "10-profile-approved",
+      "sha256": "d86deb419f01c72a1c9d5d77b9547b1ca35697073755e2335d0f43f6ef3f8324"
+    },
+    {
+      "name": "11-discovery-ready",
+      "sha256": "5db903186ca692ad479c35782af7b6077fbe707d76544d715098d5637b9b46cc"
+    },
+    {
+      "name": "12-discovery-running",
+      "sha256": "cd74bd66626db212cf2d78923cf4fea0752f8ebed0ba12e4bdb702504a5ab265"
+    },
+    {
+      "name": "13-discovery-results",
+      "sha256": "deec51e8818284a3e9d2e53eb30e5f7e820203e6a46f82645c1a1480ae5f92db"
+    },
+    {
+      "name": "14-account-application",
+      "sha256": "e994dbe56e5cf2ffe7514edd05848eb9ce50942e107b94f91782b730c9654f59"
+    },
+    {
+      "name": "15-account-sources",
+      "sha256": "1378dbb9708df4dffacde2ea497b22589fdef8805d452a25957a30ceeeeca22b"
+    },
+    {
+      "name": "16-shortlisted",
+      "sha256": "57b6b0f220ad0687bbb7006e6256701de55182c3db14e28fd67440b8917400e5"
+    },
+    {
+      "name": "17-graph-ready",
+      "sha256": "a2f19db01262965d4af277642bd4ebe53e24248cef9e9ab8ff144ffcfa6c230c"
+    },
+    {
+      "name": "18-graph-results",
+      "sha256": "4aa9fdf4860a0b68567e58c9d1da9ce7c0435dcac3a599cc95bf16e42cca94c5"
+    },
+    {
+      "name": "19-graph-person",
+      "sha256": "332d71a1fb93dcf57822a5e6e7cddeeaac1ae40eb0eb56019c3bddbed06ad70e"
+    },
+    {
+      "name": "20-native-buyer-paths",
+      "sha256": "4f4f656fa30bc25fac7ce09002339c708178c686ecd4fa651aa05ed74cc0fcb7"
+    },
+    {
+      "name": "21-compose-ready",
+      "sha256": "99acb65acb3fedb1f0284bd8ca769fdb61095c2c0df43cdeacc5c6370fe5c78a"
+    },
+    {
+      "name": "22-message-brief",
+      "sha256": "65261095f3af6aff41bebf953bd731b5487279e09df1b632e19ed1a50fa497d6"
+    },
+    {
+      "name": "23-draft-pending",
+      "sha256": "579a1462bd9dd639587262a95ce6150f8075601e5aa54fba47baa2dce9104d43"
+    },
+    {
+      "name": "24-draft-sources",
+      "sha256": "419d765b732e242ee76ca83f2fca27b8fd38991fd71794c60de5042deadf9dbd"
+    },
+    {
+      "name": "25-hitl-required",
+      "sha256": "9d05e8de4d39f02029e0d81103011dfa4a4930926dc23b1a0189171d4ba8a63a"
+    },
+    {
+      "name": "26-hitl-acknowledged-v1",
+      "sha256": "b962051e9f9a2acc847534e9b5465d967c6e0b0285fdbca6804594f08cfb5036"
+    },
+    {
+      "name": "27-hitl-approved-v1",
+      "sha256": "ad79ca2a9f1bcf49d44804ec1fdca6298b218333078d27ab4af381de2ffbd027"
+    },
+    {
+      "name": "28-message-edited",
+      "sha256": "8ebf662bb2ebe9ff54f8e539b76019e109a0a1a9f46d68e0f7278312866c8cf4"
+    },
+    {
+      "name": "29-approval-cleared-v2",
+      "sha256": "1b895e78b45d09de503968f16a1d6c60846a7cef349171f522947c80d58203be"
+    },
+    {
+      "name": "30-hitl-approved-v2",
+      "sha256": "4326928097bdb24b0dd0e9112017ddf2b49ff25b2b4f99d033f059fa5bfd687b"
+    },
+    {
+      "name": "31-dry-run-receipt",
+      "sha256": "3f1c40142ed388fd3a385d310a50861fa6ddd77ba4eef2025816931cff1ae731"
+    },
+    {
+      "name": "32-pipeline-synchronized",
+      "sha256": "f12ef0482364f15504a726b252587149958b0623e5bdf712224a4626a63408fc"
+    },
+    {
+      "name": "33-follow-up-form",
+      "sha256": "a964d20517e8cff032692e551278e703a4c7027b67a3cb90ba0447aa60f2e180"
+    },
+    {
+      "name": "34-owner-and-task-saved",
+      "sha256": "19e97a0486c7dbcd3d2c87dac774461372313eab8ac67e09eb6f465a55d2c4b4"
+    },
+    {
+      "name": "35-pipeline-list",
+      "sha256": "e7df4abb6208ad424404c38b60f41af12a2317f1d8ce9537859e7d234d8fbd2b"
+    },
+    {
+      "name": "36-pipeline-analytics",
+      "sha256": "910ca9d3e55f10fd3f06197f1216161cae621a6a4d5fe808e21019a8aca6b3ef"
+    },
+    {
+      "name": "37-pipeline-reloaded",
+      "sha256": "a2471001b28dbe8bed4f5880c579da37dc90afff2734b7bdda1dd4bf4441f8d9"
+    },
+    {
+      "name": "38a-billing-balance",
+      "sha256": "a806a997aece852d408e2fec3f09a42e1e1336ff48623c67837962a8afe5036f"
+    },
+    {
+      "name": "38b-credit-ledger",
+      "sha256": "f57287d19db68900a25fdf25812e01b2f72ac0c34f301880d90ef61a07b0e1f1"
+    },
+    {
+      "name": "39-connections-disabled",
+      "sha256": "52d05dc904b76016e86ced06b942db5d70f353cbc9e3ae4cca0c6bd697215e1f"
+    },
+    {
+      "name": "39b-ai-and-enrichment-disabled",
+      "sha256": "227c5b1a45980f5d99321e04857fabee1f91f647c102b6a74bd8580fce9d13c6"
+    }
+  ],
+  "output": "gtm-current-heart.mp4",
+  "publicVideoUrl": null,
+  "publicUploadStatus": "Awaiting owner confirmation of the YouTube submission terms",
+  "captionFile": "gtm-current-heart.srt",
+  "audioSampleRate": 48000,
+  "videoCodec": "H.264",
+  "audioCodec": "AAC"
+}

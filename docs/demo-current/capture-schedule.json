@@ -1,0 +1,10 @@
+{
+  "01-intro": [[0,"title"],[2,"01-overview-allco"],[8,"02-workspace-huasheng"],[11,"03-intake-empty"]],
+  "02-intake": [[0,"04-intake-entered"],[3,"05-intake-proposals"],[8.6,"06-intake-human-adjustment"],[13.5,"08-persona-targets"],[17.2,"07-capabilities-unconfirmed"],[22.7,"10-profile-approved"]],
+  "03-discovery": [[0,"11-discovery-ready"],[1,"12-discovery-running"],[3,"13-discovery-results"],[5.5,"14-account-application"],[10,"15-account-sources"],[18,"16-shortlisted"]],
+  "04-graph": [[0,"17-graph-ready"],[2,"18-graph-results"],[7,"19-graph-person"],[14,"20-native-buyer-paths"]],
+  "05-compose": [[0,"21-compose-ready"],[3,"22-message-brief"],[12.2,"23-draft-pending"],[18,"24-draft-sources"]],
+  "06-hitl": [[0,"25-hitl-required"],[2.5,"26-hitl-acknowledged-v1"],[4.5,"27-hitl-approved-v1"],[6.6,"28-message-edited"],[9,"29-approval-cleared-v2"],[12.8,"30-hitl-approved-v2"],[16.5,"31-dry-run-receipt"]],
+  "07-pipeline": [[0,"32-pipeline-synchronized"],[9,"33-follow-up-form"],[12,"34-owner-and-task-saved"],[15,"35-pipeline-list"],[17.5,"36-pipeline-analytics"],[20,"37-pipeline-reloaded"]],
+  "08-close": [[0,"38a-billing-balance"],[2.5,"38b-credit-ledger"],[5.1,"39-connections-disabled"],[10,"39b-ai-and-enrichment-disabled"],[15,"closing"]]
+}

@@ -123,7 +123,7 @@ test('source fetches reject private destinations and MX never claims mailbox ver
   await assert.rejects(checkSourceUrl('https://example.test/'), { code: 'source_not_allowed' });
   await assert.rejects(checkSourceUrl('https://elliottequip.com/', async () => [{ address: '192.168.1.2' }]), { code: 'private_source' });
   assert.equal((await checkMx('test@example.test', async () => [{ exchange: '.', priority: 0 }])).status, 'missing');
-  const reviewed = await reviewCandidate(researchCatalog[0], { businessId: 'allco', icp: { regions: 'US', segments: ['OEM'] } }, { resolver: async () => [{ address: '8.8.8.8' }], fetcher: async () => new Response('<html><title>Test source</title><body>Primary evidence fixture</body></html>', { headers: { 'content-type': 'text/html' } }) });
+  const reviewed = await reviewCandidate(researchCatalog[0], { businessId: 'allco', icp: { regions: 'US', segments: ['OEM'] } }, { readSource: async url => ({url, title:'Test source', text:'Primary evidence fixture', checkedAt:new Date().toISOString(), fetchStatus:'reachable'}) });
   assert.equal(reviewed.contact.mailboxStatus, 'unverified'); assert.equal(reviewed.sourceReviews[0].fetchStatus, 'reachable');
 });
 test('API requires a session, CSRF, permitted Origin and typed scoped requests', async t => {

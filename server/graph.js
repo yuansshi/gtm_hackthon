@@ -1,11 +1,19 @@
 import kuzu from 'kuzu';
 import path from 'node:path';
+import { signalFresh, signalHold } from '../src/market-signals.js';
+import { companyHoldReasons } from '../src/company-evidence.js';
+import { projectedPeople, personDateFresh } from '../src/people-evidence.js';
+import { currentEducationReviews, publicEducationEvidence } from '../src/education-evidence.js';
+import { competitiveReferences, competitorDateFresh } from '../src/competitor-evidence.js';
+import { buyingLinkStatus, buyingWindowActive, publicBuyingEvidence } from '../src/buying-evidence.js';
 
-const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
+const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal', 'Institution'];
 const relationships = {
   matched_to: ['Company', 'Product'], works_at: ['Person', 'Company'], signal_for: ['Signal', 'Company'],
   competes_with: ['Product', 'Competitor'], previously_employed_at: ['Person', 'Company'],
   contacted_via: ['Company', 'Signal'], replied_to: ['Person', 'Signal'],
+  supports_evaluation: ['Signal', 'Signal'], concerns_competitor: ['Signal', 'Competitor'],
+  studied_at: ['Person', 'Institution'],
 };
 
 export async function createGraph(directory) {
@@ -33,31 +41,70 @@ export async function createGraph(directory) {
       try {
         for (const label of labels) await query(`MATCH(n:${label}) WHERE n.businessId=$businessId DETACH DELETE n`, { businessId });
         await node('Product', prefix + 'product', state.businessId === 'allco' ? 'Custom hydraulic cylinders' : 'Wear-resistant castings', businessId, { businessName: state.company.name, families: state.productFamilies, description: state.company.description, source: state.company.website });
-        for (const c of competitors) {
-          await node('Competitor', prefix + 'competitor:' + c.id, c.name, businessId, c);
-          await edge('competes_with', prefix + 'product', prefix + 'competitor:' + c.id, businessId, c.source || 'Alternative approach; hypothesis');
+        for (const c of competitiveReferences(state, competitors)) {
+          const { review, current, ...reference } = c;
+          const competitiveReview = current ? { id: review.id, category: review.category, evidence: review.evidence, pricingMode: review.pricingMode, reviewedAt: review.reviewedAt, pages: review.pages, classification: 'Owner assessment; competitive advantage is not independently verified.' } : null;
+          await node('Competitor', prefix + 'competitor:' + c.id, current ? review.name : c.name, businessId, { ...reference, ...(current ? { source: review.evidence.identity.url, focus: review.evidence.positioning.quote, pricing: review.evidence.pricing?.quote || 'Pricing not established in reviewed pages' } : {}), competitiveReview, evidenceStatus: current ? 'Source passages reviewed' : 'Unreviewed reference / fresh review needed' });
+          if (!c.id.startsWith('custom:') || current) await edge('competes_with', prefix + 'product', prefix + 'competitor:' + c.id, businessId, current ? review.evidence.positioning.url : c.source || 'Alternative approach; hypothesis');
         }
+        for (const lead of state.leads) await node('Company', prefix + 'company:' + lead.id, lead.name, businessId, { leadId: lead.id, domain: lead.domain, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null, companyProfile:lead.companyProfile?.status==='reviewed'?lead.companyProfile:null });
         for (const lead of state.leads) {
           const companyId = prefix + 'company:' + lead.id;
-          await node('Company', companyId, lead.name, businessId, { leadId: lead.id, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null });
-          if (!lead.excludedReason) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
+          if (!lead.excludedReason && !signalHold(lead) && !companyHoldReasons(lead,state).length) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
           await node('Signal', prefix + 'signal:' + lead.id, lead.signal.title, businessId, lead.signal);
           await edge('signal_for', prefix + 'signal:' + lead.id, companyId, businessId, lead.signal.source);
-          for (const [index, p] of lead.people.entries()) {
-            const personId = prefix + 'person:' + lead.id + ':' + index;
-            await node('Person', personId, p.name, businessId, p);
+          for(const signal of (lead.marketSignals||[]).filter(signal=>signal.acceptedAt&&['accepted','needs_review'].includes(signal.status))){
+            const signalId=prefix+'market-signal:'+signal.id;
+            await node('Signal',signalId,signal.title,businessId,{...signal,provenance:'owner_reviewed_market_signal',freshContext:signalFresh(signal),purchaseIntentConfirmed:false,description:`${signal.eventDate}: ${signal.quote}. ${signal.status==='needs_review'?'Source evidence needs fresh review.':'Owner-reviewed company publication; purchasing intent remains unconfirmed.'}`});
+            await edge('signal_for',signalId,companyId,businessId,signal.source);
+          }
+          for (const { suffix, person: p } of projectedPeople(state, lead)) {
+            const personId = prefix + suffix;
+            const educations = currentEducationReviews(state, lead, p.publicReview?.id).map(publicEducationEvidence);
+            await node('Person', personId, p.name, businessId, { ...p, educations });
             await edge('works_at', personId, companyId, businessId, p.source);
-            if (p.previousCompany) {
+            for (const education of educations) {
+              const institutionId = prefix + 'institution:' + education.institutionKey;
+              await node('Institution', institutionId, education.institution.name, businessId, { domain: education.institution.domain, source: education.institution.identitySource, identityQuote: education.institution.identityQuote, role: 'Reviewed institution reference; not an account', provenance: 'owner_reviewed_institution' });
+              await edge('studied_at', personId, institutionId, businessId, JSON.stringify(education));
+            }
+            if (p.publicReview?.formerEmployer) {
+              const employer = p.publicReview.formerEmployer;
+              const account = state.leads.find(item => item.domain.toLowerCase().replace(/^www\./, '') === employer.domain);
+              const previousId = account ? prefix + 'company:' + account.id : prefix + 'employer:' + employer.domain;
+              if (!account) await node('Company', previousId, employer.name, businessId, { domain: employer.domain, role: 'Reviewed former-employer reference; not a lead', source: employer.identitySource, identityQuote: employer.identityQuote });
+              await edge('previously_employed_at', personId, previousId, businessId, p.source);
+            } else if (p.previousCompany) {
               const previousId = prefix + 'previous:' + p.previousCompany.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-              await node('Company', previousId, p.previousCompany, businessId, { role: 'Previous employer; not a lead', source: p.source });
+              await node('Company', previousId, p.previousCompany, businessId, { role: 'Previous employer name; unresolved identity, not a lead', unresolvedIdentity: true, source: p.source });
               await edge('previously_employed_at', personId, previousId, businessId, p.source);
             }
           }
-          for (const draft of state.drafts.filter(d => d.leadId === lead.id && ['simulated', 'accepted'].includes(d.status))) {
+          const outbound = state.drafts.filter(d => d.leadId === lead.id && ['simulated', 'accepted'].includes(d.status));
+          for (const draft of outbound) {
             const outreachId = prefix + 'outreach:' + draft.id;
-            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { channel: draft.channel, mode: draft.status, at: draft.sentAt });
+            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { draftId: draft.id, channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, mode: draft.status === 'simulated' ? 'dry_run' : 'live', at: draft.sentAt, deliveryProvider: draft.deliveryProvider || null, providerStatus: draft.deliveryStatus || null, providerAcceptedAt: draft.providerAcceptedAt || null, signedReceiptAt: draft.deliveryReceiptAt || null, description: draft.status === 'simulated' ? 'Local dry run; no external message sent.' : 'Provider acceptance; inbox delivery not established.' });
             await edge('contacted_via', companyId, outreachId, businessId, draft.id);
           }
+          for (const report of (lead.events || []).filter(event => event.recordType === 'outcome')) {
+            const outcomeId = prefix + 'outcome:' + report.id;
+            const isDemo = report.mode === 'dry_run';
+            const attribution = isDemo ? 'Demo observation; no real response established.' : 'Manually reported; not provider-verified.';
+            await node('Signal', outcomeId, `${report.stage} · ${isDemo ? 'demo' : 'user-reported'}`, businessId, { outcomeId: report.id, stage: report.stage, at: report.at, recordedAt: report.recordedAt, actor: report.actor, mode: report.mode, provenance: 'user_reported', providerVerified: false, draftId: report.draftId, respondent: report.respondent, source: report.evidenceUrl || null, description: `${attribution} ${report.note}` });
+            await edge('signal_for', outcomeId, companyId, businessId, `${attribution} Recorded by ${report.actor} at ${report.recordedAt}.`);
+            const draft = outbound.find(draft => draft.id === report.draftId && draft.businessId === businessId);
+            const personIndex = report.respondent ? lead.people.findIndex(person => person.name === report.respondent.name && person.source === report.respondent.source) : -1;
+            if (report.stage === 'Replied' && draft && personIndex >= 0 && (isDemo === (draft.status === 'simulated')) && Date.parse(report.at) >= Date.parse(draft.sentAt)) {
+              await edge('replied_to', prefix + 'person:' + lead.id + ':' + personIndex, prefix + 'outreach:' + draft.id, businessId, `${attribution} ${report.respondent.name}; occurrence ${report.at}; recorded by ${report.actor} at ${report.recordedAt}.`);
+            }
+          }
+        }
+        for (const link of state.buyingLinks || []) {
+          const lead = state.leads.find(lead => lead.id === link.leadId);
+          if (buyingLinkStatus(link, state, lead, Date.now(), competitors) !== 'active') continue;
+          const proof = JSON.stringify(publicBuyingEvidence(link));
+          if (link.kind === 'evaluation') await edge('supports_evaluation', prefix + 'market-signal:' + link.jobSignalId, prefix + 'market-signal:' + link.signalId, businessId, proof);
+          else await edge('concerns_competitor', prefix + 'market-signal:' + link.signalId, prefix + 'competitor:' + link.competitorId, businessId, proof);
         }
         await query('COMMIT');
       } catch (error) { await query('ROLLBACK'); throw error; }
@@ -73,7 +120,12 @@ export async function createGraph(directory) {
     const edges = [];
     for (const [type, [from, to]] of Object.entries(relationships)) {
       const rows = await query(`MATCH(a:${from})-[r:${type}]->(b:${to}) WHERE a.businessId=$businessId AND b.businessId=$businessId AND r.businessId=$businessId RETURN a.id AS source,b.id AS target,r.evidence AS evidence`, { businessId });
-      edges.push(...rows.map(r => ({ ...r, type })));
+      edges.push(...rows.map(r => {
+        if (type === 'studied_at') { const proof = JSON.parse(r.evidence); return { ...r, type, evidence: `Owner-reviewed education claim: ${proof.quote}`, educationEvidence: proof }; }
+        if (!['supports_evaluation', 'concerns_competitor'].includes(type)) return { ...r, type };
+        const proof = JSON.parse(r.evidence);
+        return { ...r, type, evidence: `Owner-linked published window: ${proof.startDate} to ${proof.endDate}. Buying intent and displacement remain unconfirmed.`, buyingEvidence: proof };
+      }));
     }
     return { engine: `Kuzu ${kuzu.VERSION}`, businessId, nodes, edges };
   }
@@ -82,5 +134,50 @@ export async function createGraph(directory) {
     const rows = await query('MATCH(p:Person)-[:works_at]->(c:Company)-[:matched_to]->(product:Product) WHERE p.businessId=$id AND c.businessId=$id AND product.businessId=$id RETURN p.name AS person,c.name AS company,product.name AS product,p.data AS evidence', { id });
     return rows.map(r => ({ ...r, evidence: JSON.parse(r.evidence), relation: 'Person → works_at → Company → matched_to → Product' }));
   });
-  return { sync, snapshot, paths, close: async () => { await queue; await connection.close(); await db.close(); } };
+  const marketPaths = id => serial(async()=>{
+    const rows=await query('MATCH(s:Signal)-[:signal_for]->(c:Company)-[:matched_to]->(p:Product) WHERE s.businessId=$id AND c.businessId=$id AND p.businessId=$id RETURN s.name AS signal,s.data AS evidence,c.name AS company,p.name AS product',{id});
+    return rows.flatMap(row=>{const evidence=JSON.parse(row.evidence);return evidence.provenance==='owner_reviewed_market_signal'&&signalFresh(evidence)?[{...row,evidence,relation:'Signal → signal_for → Company → matched_to → Product',interpretation:'Current public-event context; buyer evaluation cycle and purchase intent unconfirmed.'}]:[];});
+  });
+  const warmPaths = id => serial(async () => {
+    const fresh = person => person.reviewCurrent && person.publicReview?.status === 'reviewed' && personDateFresh(person.publicReview.checkedAt) && (!person.publicReview.formerEmployer || personDateFresh(person.publicReview.formerEmployer.checkedAt));
+    const people = (await query('MATCH(p:Person) WHERE p.businessId=$id RETURN p.id AS id,p.data AS data', { id })).map(row => ({ id: row.id, data: JSON.parse(row.data) })).filter(row => fresh(row.data));
+    const anchorIds = people.filter(row => row.data.knownConnection).map(row => row.id);
+    if (!anchorIds.length) return [];
+    const personIds = people.map(row => row.id);
+    const paths = [];
+    for (const anchorEdge of ['works_at', 'previously_employed_at']) for (const targetEdge of ['works_at', 'previously_employed_at']) {
+      const rows = await query(`MATCH(a:Person)-[:${anchorEdge}]->(shared:Company)<-[:${targetEdge}]-(t:Person)-[:works_at]->(c:Company)-[:matched_to]->(p:Product) WHERE a.businessId=$id AND t.businessId=$id AND shared.businessId=$id AND c.businessId=$id AND p.businessId=$id AND a.id<>t.id AND a.id IN $anchorIds AND t.id IN $personIds RETURN a.id AS anchorId,a.name AS anchor,a.data AS anchorData,t.id AS personId,t.name AS person,t.data AS targetData,shared.name AS employer,shared.data AS employerData,c.name AS company,c.data AS companyData,p.name AS product ORDER BY a.id,t.id,shared.id LIMIT 100`, { id, anchorIds, personIds });
+      for (const row of rows) {
+        const anchor = JSON.parse(row.anchorData), target = JSON.parse(row.targetData), employer = JSON.parse(row.employerData);
+        if (!fresh(anchor) || !fresh(target) || !anchor.knownConnection || employer.unresolvedIdentity || row.anchor.toLowerCase() === row.person.toLowerCase()) continue;
+        const employment = (person, edge) => ({ name: person.name, role: person.role, relationship: edge, source: person.publicReview.source, quote: edge === 'works_at' ? person.publicReview.roleQuote : person.publicReview.formerEmployer?.quote, checkedAt: person.publicReview.checkedAt, identitySource: edge === 'previously_employed_at' ? person.publicReview.formerEmployer?.identitySource : null, identityQuote: edge === 'previously_employed_at' ? person.publicReview.formerEmployer?.identityQuote : null });
+        paths.push({ id: `${row.anchorId}|${anchorEdge}|${row.personId}|${targetEdge}|${row.employer}`, anchor: row.anchor, person: row.person, company: row.company, leadId: JSON.parse(row.companyData).leadId, product: row.product, employer: row.employer, anchorEvidence: employment(anchor, anchorEdge), targetEvidence: employment(target, targetEdge), connection: anchor.knownConnection, relation: `Person → ${anchorEdge} → Company ← ${targetEdge} ← Person → works_at → Company → matched_to → Product`, interpretation: 'Possible introduction based on reviewed publications and your attestation. Dates, employment overlap, acquaintance, current employment, willingness and buying authority are unconfirmed.' });
+      }
+    }
+    return paths.slice(0, 100);
+  });
+  const educationPaths = (id, clock = Date.now()) => serial(async () => {
+    const personFresh = person => person.reviewCurrent && person.publicReview?.status === 'reviewed' && personDateFresh(person.publicReview.checkedAt, clock) && (!person.publicReview.formerEmployer || personDateFresh(person.publicReview.formerEmployer.checkedAt, clock));
+    const educationFresh = (person, proof) => personFresh(person) && proof.personReviewId === person.publicReview.id && person.educations?.some(item => item.id === proof.id) && personDateFresh(proof.checkedAt, clock) && personDateFresh(proof.institution.checkedAt, clock);
+    const people = (await query('MATCH(p:Person) WHERE p.businessId=$id RETURN p.id AS id,p.data AS data', { id })).map(row => ({ id: row.id, data: JSON.parse(row.data) })).filter(row => personFresh(row.data) && row.data.educations?.some(proof => educationFresh(row.data, proof)));
+    const anchorIds = people.filter(row => row.data.knownConnection).map(row => row.id);
+    if (!anchorIds.length) return [];
+    const personIds = people.map(row => row.id);
+    const rows = await query('MATCH(a:Person)-[ae:studied_at]->(i:Institution)<-[te:studied_at]-(t:Person)-[:works_at]->(c:Company)-[:matched_to]->(p:Product) WHERE a.businessId=$id AND t.businessId=$id AND i.businessId=$id AND c.businessId=$id AND p.businessId=$id AND ae.businessId=$id AND te.businessId=$id AND a.id<>t.id AND a.id IN $anchorIds AND t.id IN $personIds RETURN a.id AS anchorId,a.name AS anchor,a.data AS anchorData,t.id AS personId,t.name AS person,t.data AS targetData,i.id AS institutionId,i.name AS institution,c.name AS company,c.data AS companyData,p.name AS product,ae.evidence AS anchorProof,te.evidence AS targetProof ORDER BY a.id,t.id,i.id LIMIT 200', { id, anchorIds, personIds });
+    return rows.flatMap(row => {
+      const anchor = JSON.parse(row.anchorData), target = JSON.parse(row.targetData), anchorProof = JSON.parse(row.anchorProof), targetProof = JSON.parse(row.targetProof);
+      if (!anchor.knownConnection || !educationFresh(anchor, anchorProof) || !educationFresh(target, targetProof) || anchorProof.institutionKey !== targetProof.institutionKey || row.anchor.toLowerCase() === row.person.toLowerCase()) return [];
+      const evidence = (person, proof) => ({ ...proof, name: person.name, role: person.role, roleSource: person.publicReview.source, roleQuote: person.publicReview.roleQuote });
+      return [{ id: `${row.anchorId}|${row.personId}|${row.institutionId}`, anchor: row.anchor, person: row.person, institution: row.institution, company: row.company, leadId: JSON.parse(row.companyData).leadId, product: row.product, anchorEvidence: evidence(anchor, anchorProof), targetEvidence: evidence(target, targetProof), connection: anchor.knownConnection, relation: 'Person → studied_at → Institution ← studied_at ← Person → works_at → Company → matched_to → Product', interpretation: 'Possible introduction from reviewed public education claims and your relationship attestation. Degrees, attendance, dates, campus identity, overlap, acquaintance, willingness and buying authority are not independently verified.' }];
+    }).slice(0, 100);
+  });
+  const buyingPaths = (id, clock = Date.now()) => serial(async () => {
+    const evaluations = await query('MATCH(j:Signal)-[r:supports_evaluation]->(s:Signal)-[:signal_for]->(c:Company)-[:matched_to]->(p:Product) WHERE j.businessId=$id AND s.businessId=$id AND c.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN j.data AS job,s.data AS signal,c.name AS company,c.data AS account,p.name AS product,r.evidence AS proof ORDER BY j.id,s.id LIMIT 200', { id });
+    const displacements = await query('MATCH(c:Company)<-[:signal_for]-(s:Signal)-[r:concerns_competitor]->(v:Competitor)<-[:competes_with]-(p:Product)<-[:matched_to]-(c) WHERE c.businessId=$id AND s.businessId=$id AND v.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN s.data AS signal,c.name AS company,c.data AS account,v.name AS competitor,v.data AS competitorData,p.name AS product,r.evidence AS proof ORDER BY s.id,v.id LIMIT 200', { id });
+    return {
+      evaluations: evaluations.flatMap(row => { const proof = JSON.parse(row.proof); return buyingWindowActive(proof, clock) && signalFresh(JSON.parse(row.job), clock) && signalFresh(JSON.parse(row.signal), clock) ? [{ ...proof, company: row.company, product: row.product, leadId: JSON.parse(row.account).leadId, interpretation: 'Owner-linked job relevance to a published evaluation window; purchasing intent and causal connection are unconfirmed.' }] : []; }).slice(0, 100),
+      displacements: displacements.flatMap(row => { const proof = JSON.parse(row.proof), review = JSON.parse(row.competitorData).competitiveReview; return buyingWindowActive(proof, clock) && signalFresh(JSON.parse(row.signal), clock) && review?.pages.every(page => competitorDateFresh(page.checkedAt, 24 * 30, clock)) ? [{ ...proof, company: row.company, product: row.product, competitor: row.competitor, leadId: JSON.parse(row.account).leadId, interpretation: 'Published supplier-change context for owner assessment; a replacement opportunity and willingness to switch remain unconfirmed.' }] : []; }).slice(0, 100),
+    };
+  });
+  return { sync, snapshot, paths, marketPaths, warmPaths, educationPaths, buyingPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
 }

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowRight, BookOpen, Check, ChevronLeft, Download, ExternalLink, FileCheck2, Layers3, Plus, Save, ShieldCheck, Target } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronDown, Download, ExternalLink, FileCheck2, Layers3, Plus, Save, ShieldCheck, Target } from 'lucide-react';
 import { missingResearchFields } from './businesses';
 import GuidedIntake, { ConfidencePanel } from './GuidedIntake';
+import {commercialPlanningFields} from './commercial-planning.js';
+import {personaFields} from './buyer-persona.js';
+import ExpansionSuggestions from './ExpansionSuggestions.jsx';
 
 const tabs = [
   { title: 'Company & products', icon: Layers3 },
@@ -23,13 +26,12 @@ export default function ModuleOne({ business, state, change: commitChange, appro
   const toggle = (section, key, item) => update(section, key, state[section][key].includes(item) ? state[section][key].filter(x => x !== item) : [...state[section][key], item]);
   const toggleFamily = id => change(s => ({ ...s, productFamilies: s.productFamilies.includes(id) ? s.productFamilies.filter(f => f !== id) : [...s.productFamilies, id] }));
   const setCapability = (key, property, value) => change(s => ({ ...s, capabilities: { ...s.capabilities, [key]: { ...s.capabilities[key], [property]: value, ...(property === 'value' ? { status: 'unknown' } : {}) } } }));
-  const decideExpansion = (id, decision) => change(s => ({ ...s, expansionDecisions: { ...s.expansionDecisions, [id]: s.expansionDecisions[id] === decision ? 'undecided' : decision } }));
   const productNames = business.families.filter(([id]) => state.productFamilies.includes(id)).map(([, name]) => name);
 
   return <>
-    <div className="page-heading"><div><div className="eyebrow">Module 01 / {business.name}</div><h1>Define what you can supply.</h1><p>Turn your products, capabilities, and customer criteria into an approved research brief.</p></div><div className="heading-actions"><button className="button secondary" onClick={saveDraft}><Save size={15} />Save draft</button><button className="button secondary" onClick={exportBrief}><Download size={15} />Export brief</button></div></div>
+    <div className="page-heading"><div><div className="eyebrow">Module 01 / {business.name}</div><h1>Product & ICP</h1><p>Turn your products, capabilities, and customer criteria into an approved research brief.</p></div><div className="heading-actions"><button className="button secondary" onClick={saveDraft}><Save size={15} />Save draft</button><button className="button secondary" onClick={exportBrief}><Download size={15} />Export brief</button></div></div>
     <div className="business-boundary"><span className={`business-stamp ${business.color}`}>{business.initials}</span><div><strong>{business.name}</strong><span>Only this business’s profile, approvals, and campaign data are in this workspace.</span></div><span className={`pill ${state.approved ? 'green' : 'amber'}`}><i />{state.approved ? 'Research profile approved' : 'Draft · review required'}</span></div>
-    <GuidedIntake state={state} act={act} busy={busy} />
+    <details className="intake-disclosure" open={!state.approved}><summary><span><strong>Guided product intake</strong><small>{state.approved ? 'Profile approved. Expand to refine product context.' : 'Build your profile from a plain-language product description.'}</small></span><ChevronDown size={17} /></summary><GuidedIntake state={state} act={act} busy={busy} /></details>
     <div className="module-one-layout">
       <section className="panel module-one-form">
         <div className="profile-steps" role="tablist" aria-label="Module 1 sections">{tabs.map(({ title, icon: Icon }, i) => <button type="button" key={title} role="tab" aria-selected={tab === i} aria-controls={`profile-panel-${i}`} id={`profile-tab-${i}`} className={tab === i ? 'selected' : ''} onClick={() => setTab(i)}><span>{i + 1}</span><Icon size={15} />{title}</button>)}</div>
@@ -55,6 +57,8 @@ export default function ModuleOne({ business, state, change: commitChange, appro
             <div className="field-grid"><Field id="lead-time" label="Typical production lead time" value={state.commercial.leadTime} onChange={v => update('commercial', 'leadTime', v)} placeholder="Not confirmed" /><Field id="minimum-order" label="Minimum order / typical quantity" value={state.commercial.minimumOrder} onChange={v => update('commercial', 'minimumOrder', v)} placeholder="Not confirmed" /></div>
             <Field id="delivery-terms" label="Delivery regions & shipping terms" value={state.commercial.deliveryTerms} onChange={v => update('commercial', 'deliveryTerms', v)} placeholder="Confirm available destinations, freight basis, and terms" />
             <Field id="quote-basis" label="Quotation basis" value={state.commercial.quoteBasis} onChange={v => update('commercial', 'quoteBasis', v)} />
+            <div className="form-divider"/><div className="section-heading"><div><h2>Internal commercial plan</h2><p>Owner-supplied planning inputs. Customer quotations require separate review.</p></div></div>
+            {commercialPlanningFields.map(({key,label,help})=><Field key={key} id={'commercial-'+key} label={label} value={state.commercial[key]||''} onChange={v=>update('commercial',key,v)} maxLength={600} placeholder="Not supplied" help={help}/>)}
           </>}
           {tab === 2 && <>
             <div className="section-heading"><div><h2>Ideal customer profile</h2><p>Choose the commercial direction for this business’s prospect research.</p></div><span className="pill blue">Proposed · editable</span></div>
@@ -66,14 +70,12 @@ export default function ModuleOne({ business, state, change: commitChange, appro
             <Field id="reference-wins" label="Existing customers & reference wins" value={state.icp.referenceWins || ''} onChange={v => update('icp', 'referenceWins', v)} multiline placeholder="Not supplied — add only approved referenceable customer evidence" />
             <fieldset className="choice-fieldset"><legend>Buyer segments</legend><p>Select the organizations you want to approach.</p><div className="choice-chips">{business.segments.map(segment => <label key={segment} className={state.icp.segments.includes(segment) ? 'selected' : ''}><input type="checkbox" aria-label={`Target ${segment}`} checked={state.icp.segments.includes(segment)} onChange={() => toggle('icp', 'segments', segment)} />{segment}</label>)}</div></fieldset>
             <fieldset className="choice-fieldset"><legend>Buyer roles</legend><p>Suggested roles are preselected for your review.</p><div className="choice-chips">{business.roles.map(role => <label key={role} className={state.icp.roles.includes(role) ? 'selected' : ''}><input type="checkbox" aria-label={`Contact ${role}`} checked={state.icp.roles.includes(role)} onChange={() => toggle('icp', 'roles', role)} />{role}</label>)}</div></fieldset>
+            {personaFields.map(({key,label,help})=><Field key={key} id={'persona-'+key} label={label} value={state.icp[key]||''} maxLength={600} onChange={v=>update('icp',key,v)} help={help} placeholder="Not supplied"/>)}
             <div className="field"><label htmlFor="sales-motion">Primary sales motion</label><select id="sales-motion" value={state.icp.motion} onChange={e => update('icp', 'motion', e.target.value)}><option value="">Select a sales motion</option><option value="replacement">Replacement / maintenance (MRO)</option><option value="oem">New equipment / OEM supply</option><option value="channel">Distributor / channel development</option></select><small>This will shape discovery signals, qualification questions, and the first outreach.</small></div>
             <Field id="exclusions" label="Exclusions & qualification boundaries" value={state.icp.exclusions} onChange={v => update('icp', 'exclusions', v)} multiline />
             <Field id="excluded-domains" label="Exclude company domains" value={state.icp.excludedDomains || ''} onChange={v => update('icp', 'excludedDomains', v)} placeholder="example.com, another-company.com" help="Exact domain exclusions are enforced during research. Narrative qualification boundaries remain review questions." />
-            <div className="form-divider" /><div className="section-heading"><div><h2>Adjacent segments to consider</h2><p>Catalog-based suggestions. Accept or reject each one explicitly.</p></div></div>
-            <div className="expansion-cards">{business.expansions.map(item => {
-              const decision = state.expansionDecisions[item.id];
-              return <article className="expansion-card" key={item.id}><div><h3>{item.name}</h3><p>{item.reason}</p><a className="evidence-link" href={item.source} target="_blank" rel="noreferrer"><BookOpen size={12} />Why this segment was suggested<ExternalLink size={11} /></a></div><div className="expansion-actions"><button type="button" aria-pressed={decision === 'accepted'} aria-label={`Accept ${item.name}`} className={`button ${decision === 'accepted' ? 'primary' : 'secondary'}`} onClick={() => decideExpansion(item.id, 'accepted')}>{decision === 'accepted' ? <Check size={14} /> : <Plus size={14} />}{decision === 'accepted' ? 'Accepted' : 'Accept'}</button><button type="button" aria-pressed={decision === 'rejected'} aria-label={`Reject ${item.name}`} className={`button ${decision === 'rejected' ? 'rejected' : 'secondary'}`} onClick={() => decideExpansion(item.id, 'rejected')}>{decision === 'rejected' ? 'Rejected' : 'Reject'}</button></div></article>;
-            })}</div>
+            <div className="form-divider" /><div className="section-heading"><div><h2>Adjacent segments to consider</h2><p>Catalog-linked research hypotheses. Accept, adjust or dismiss each one, then approve the profile before using it as an optional search target.</p></div></div>
+            <ExpansionSuggestions business={business} state={state} change={change} busy={busy}/>
             <div className="approval-check"><label><input type="checkbox" aria-label="Confirm customer profile review" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} /><span>I reviewed this business’s target products, territories, and buyer profile. Approval authorizes prospect research; compatibility, pricing, and delivery still require review.</span></label></div>
           </>}
         </div>
@@ -83,7 +85,7 @@ export default function ModuleOne({ business, state, change: commitChange, appro
         <section className={`readiness-panel ${missing.length ? '' : 'ready'}`}><div><FileCheck2 size={18} /><h3>{missing.length ? `${missing.length} items before research approval` : 'Ready for your review'}</h3></div>{missing.length ? <ul>{missing.map(item => <li key={item}>{item}</li>)}</ul> : <p>Review the Ideal customers section and confirm before approving.</p>}</section>
         <ConfidencePanel state={state} />
         <div className="notice industrial-note"><ShieldCheck size={18} /><span><strong>Technical qualification stays separate.</strong> Discovery may identify a possible application. An engineer must confirm the part, drawing revision, material, and operating conditions before a quote or compatibility claim.</span></div>
-        {state.approved && <button className="button primary" onClick={() => go('discovery')}>Continue to Module 2<ArrowRight size={16} /></button>}
+        {state.approved && <button className="button primary" onClick={() => go('discovery')}>Open account research<ArrowRight size={16} /></button>}
       </aside>
     </div>
   </>;

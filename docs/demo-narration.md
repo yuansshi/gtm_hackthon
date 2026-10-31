@@ -1,4 +1,6 @@
-# Desktop walkthrough transcript
+# Earlier desktop walkthrough transcript
+
+Archived earlier narration. The current submission video is the [2:47 Heart-narrated public demonstration](https://youtu.be/lXMJIpLYfAc). Test counts and UI details below describe the earlier recorded version; consult rubric-status.md for current coverage.
 
 Delivered separately as `gtm-desktop-walkthrough.mp4` (2 minutes 51 seconds). Narrated stills captured from the actual desktop application; this is not a continuous live screen recording. Voice is synthesized locally. Provider connection and delivery limitations are stated in the narration.
 

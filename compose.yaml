@@ -1,0 +1,18 @@
+services:
+  portal:
+    build: .
+    init: true
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATA_DIR: /data
+      PROJECT_ACCESS_TOKEN: ${PROJECT_ACCESS_TOKEN:?Set a strong project token in .env.deploy}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the exact browser origin in .env.deploy}
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - portal-data:/data
+    stop_grace_period: 90s
+volumes:
+  portal-data:

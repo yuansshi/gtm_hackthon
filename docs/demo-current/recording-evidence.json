@@ -1,0 +1,164 @@
+{
+  "sourceCommit": "05a95ec305dc92bc0fe785b8e52cdef9b12547cf",
+  "recordedAt": "2026-10-31",
+  "workspace": "isolated native SQLite/Kuzu recording workspace",
+  "graphEngine": "Kuzu",
+  "providers": [
+    {
+      "name": "Band project agents",
+      "configured": false,
+      "connected": false
+    },
+    {
+      "name": "Flexprice",
+      "configured": false,
+      "connected": false
+    },
+    {
+      "name": "LLM",
+      "configured": false,
+      "connected": false
+    },
+    {
+      "name": "Hunter",
+      "configured": false,
+      "connected": false
+    },
+    {
+      "name": "Tavily",
+      "configured": false,
+      "connected": false
+    },
+    {
+      "name": "SendGrid email",
+      "configured": false,
+      "connected": false
+    }
+  ],
+  "allco": {
+    "accounts": 4,
+    "shortlisted": 1,
+    "balance": 96,
+    "profileApproved": true,
+    "drafts": 1,
+    "draftVersion": 2,
+    "draftStatus": "simulated",
+    "deliveryMode": "dry_run",
+    "receipt": "58b24ca9-1d26-43f4-b511-1ccdd594188f",
+    "owner": "Demo sales owner",
+    "nextAction": "Review drawing and supplier qualification requirements",
+    "stage": "Contacted",
+    "externalAttempts": 0,
+    "bandRuns": 0,
+    "replies": 0,
+    "qualifiedRfqs": 0,
+    "discoveryStatus": "completed",
+    "charges": [
+      {
+        "kind": "outreach",
+        "credits": 1,
+        "status": "consumed"
+      },
+      {
+        "kind": "graph_query",
+        "credits": 1,
+        "status": "consumed"
+      },
+      {
+        "kind": "discovery",
+        "credits": 2,
+        "status": "consumed"
+      }
+    ]
+  },
+  "huasheng": {
+    "accounts": 0,
+    "drafts": 0,
+    "balance": 100,
+    "profileApproved": false
+  },
+  "sources": [
+    {
+      "account": "elliott",
+      "checks": [
+        {
+          "url": "https://elliottequip.com/",
+          "checkedAt": "2026-10-31T12:09:32.828Z",
+          "fetchStatus": "reachable",
+          "contentHash": "6af51f4e1c68a6084e9209262a60c766fdcdbb1e448f2a63a712ad39db47fdc7"
+        },
+        {
+          "url": "https://elliottequip.com/contact/",
+          "checkedAt": "2026-10-31T12:09:32.785Z",
+          "fetchStatus": "reachable",
+          "contentHash": "3cc93b074eae5e41de361d5cef7336fa7acaf60c7a6e61f543d2c06ee01c4e96"
+        },
+        {
+          "url": "https://elliottequip.com/press-release-andrew-schumacher-vice-president-nebraska-operations-chad-barrett-director-product-management/",
+          "checkedAt": "2026-10-31T12:09:40.929Z",
+          "fetchStatus": "reachable",
+          "contentHash": "f505b93d2f0e598a5b52afaa5da14e84bbbedf16854bff86bcad16d672178c29"
+        }
+      ]
+    },
+    {
+      "account": "linkbelt",
+      "checks": [
+        {
+          "url": "https://www.linkbelt.com/about-/",
+          "checkedAt": "2026-10-31T12:09:41.296Z",
+          "fetchStatus": "failed",
+          "error": "source_too_large"
+        },
+        {
+          "url": "https://www.linkbelt.com/about/executive-team/",
+          "checkedAt": "2026-10-31T12:09:41.367Z",
+          "fetchStatus": "failed",
+          "error": "source_too_large"
+        }
+      ]
+    },
+    {
+      "account": "superior",
+      "checks": [
+        {
+          "url": "https://superior-ind.com/products/patriot",
+          "checkedAt": "2026-10-31T12:09:43.081Z",
+          "fetchStatus": "reachable",
+          "contentHash": "4a4051db7f28135c50ddfbb9bf74192ec2f9cb947d548f22c452b2e580017c5e"
+        },
+        {
+          "url": "https://superior-ind.com/",
+          "checkedAt": "2026-10-31T12:09:41.836Z",
+          "fetchStatus": "reachable",
+          "contentHash": "49acbe0429bdbd95655d5994bff26de12eb87b63993646bf149fe09108ee218c"
+        }
+      ]
+    },
+    {
+      "account": "altec",
+      "checks": [
+        {
+          "url": "https://www.altec.com/about-altec",
+          "checkedAt": "2026-10-31T12:09:47.302Z",
+          "fetchStatus": "reachable",
+          "contentHash": "4e04daa18b109db3b05bd3c53305ed1a06cf9e65b1682a3c43b1b8f02f240ba3"
+        },
+        {
+          "url": "https://www.altec.com/about-altec/contact-us",
+          "checkedAt": "2026-10-31T12:09:47.327Z",
+          "fetchStatus": "reachable",
+          "contentHash": "efb08b3f6097777fe2513a3df69bb760c7d34b47c2895daaf793d14b5c9af0d4"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Reachability and a literal public fact do not verify semantic relevance, a current role, authority, buying intent or mailbox deliverability.",
+    "Link-Belt source retrieval failed the size bound; failure is retained and not presented as successful fresh verification.",
+    "Local extraction, templates and deterministic handoffs are not live models or Band execution.",
+    "The owner label and next action are demonstration inputs, not actual customer engagement.",
+    "No external email, LinkedIn message, Band post, provider charge or real payment was made.",
+    "UI screenshots are edited into a narrated walkthrough; they are actual captured states, not an uninterrupted screen recording."
+  ]
+}

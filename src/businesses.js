@@ -1,4 +1,8 @@
 // Public website statements are starting evidence, not verified manufacturing limits.
+import {commercialPlanningFields} from './commercial-planning.js';
+import {productIntakeFields,capabilityIntakeKey} from './product-intake.js';
+import {personaFields} from './buyer-persona.js';
+import {acceptedExpansions} from './expansion-review.js';
 export const businesses = [
   {
     id: 'huasheng', name: 'Huasheng Castings', initials: 'HS', color: 'blue',
@@ -116,7 +120,7 @@ export function createResearchBrief(state) {
     technicalQualification: 'Requires engineering review for each opportunity',
     productFamilies: b.families.filter(([key]) => state.productFamilies.includes(key)).map(([id, name]) => ({ id, name })),
     capabilities: state.capabilities, commercial: state.commercial, idealCustomerProfile: state.icp,
-    acceptedExpansionSegments: b.expansions.filter(e => state.expansionDecisions[e.id] === 'accepted'),
+    acceptedExpansionSegments: acceptedExpansions(b,state),
     fieldConfidence: profileConfidence(state),
     sources: b.sources,
     caveat: 'Website-stated capabilities are unverified. Blank values are unknown. Research approval does not approve compatibility, pricing, or delivery promises.',
@@ -131,13 +135,20 @@ export function profileConfidence(state) {
     ['regions', state.icp.regions, 'Campaign owner input'],
     ['segments', state.icp.segments, 'Campaign owner input'],
     ['roles', state.icp.roles, 'Role hypothesis; buying authority unverified'],
+    ...personaFields.map(({key,label})=>[key,state.icp[key],'Owner-defined persona target; current role and authority unverified',label]),
     ['naics', state.icp.naics, 'Owner-provided classification; verify each company'],
     ['headcount', state.icp.headcount, 'Owner-defined target; account size unverified'],
     ['revenue', state.icp.revenue, 'Owner-defined target; account revenue unverified'],
     ['triggers', state.icp.triggers, 'Owner-defined research signal'],
-  ].map(([field, value, basis]) => {
+    ...commercialPlanningFields.map(({key,label})=>['commercial.'+key,state.commercial?.[key],'Owner-supplied internal plan; not a quote',label]),
+    ...productIntakeFields(businessById(state.businessId)).map(({field,label})=>{
+      const key=capabilityIntakeKey(field),capability=key?state.capabilities?.[key]:null;
+      const basis=!key?'Product statement; supplier verification required':capability?.status==='reviewed'?'Internally reviewed; application qualification separate':capability?.status==='website'?'Website statement; supplier verification required':'Owner-supplied technical statement; qualification unverified';
+      return[field,key?capability?.value:state.company?.description,basis,label];
+    }),
+  ].map(([field, value, basis,label]) => {
     const provenance = state.assistantFieldProvenance?.[field];
-    if (provenance && JSON.stringify(provenance.value) === JSON.stringify(value)) return { field, value, confidence: provenance.confidence, basis: { user_input: 'Campaign owner input', catalog_hypothesis: 'Catalog hypothesis, reviewed as a target' }[provenance.basis] || provenance.basis, evidence: provenance.evidence, method: provenance.method, runId: provenance.runId, reviewedAt: provenance.reviewedAt };
-    return { field, value, confidence: known(value) ? (['regions', 'segments'].includes(field) ? 1 : 0.5) : 0, basis: known(value) ? basis : 'Unknown / not supplied', method: 'Evidence coverage heuristic; not calibrated confidence' };
+    if (provenance && JSON.stringify(provenance.value) === JSON.stringify(value)) return { field, ...(label?{label}:{}), value, confidence: provenance.confidence, basis: { user_input: 'Campaign owner input', catalog_hypothesis: 'Catalog hypothesis, reviewed as a target' }[provenance.basis] || provenance.basis, evidence: provenance.evidence, method: provenance.method, runId: provenance.runId, reviewedAt: provenance.reviewedAt };
+    return { field, ...(label?{label}:{}), value, confidence: known(value) ? (['regions', 'segments'].includes(field) ? 1 : 0.5) : 0, basis: known(value) ? basis : 'Unknown / not supplied', method: 'Evidence coverage heuristic; not calibrated confidence' };
   });
 }

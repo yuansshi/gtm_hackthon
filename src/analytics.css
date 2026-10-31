@@ -1,0 +1,61 @@
+.pa-analytics{padding:22px;background:#f9fafc;color:#34465e;font-size:12px;line-height:1.65}
+.pa-heading{display:flex;justify-content:space-between;align-items:center;gap:22px;margin-bottom:14px}
+.pa-heading h3{display:flex;align-items:center;gap:8px;font-size:16px;margin:0;font-weight:700;letter-spacing:-.3px}
+.pa-heading p{font-size:12px;color:#6b778b;margin-top:5px;max-width:480px}
+.pa-controls{display:flex;gap:12px;flex-shrink:0}
+.pa-controls label{display:grid;gap:5px;font-size:11px;color:#69768a}
+.pa-controls select{height:35px;border:1px solid #dce3ed;border-radius:5px;background:#fff;padding:5px 25px 5px 9px;color:#40536e;font-size:12px;min-width:128px}
+.pa-scope{display:flex;gap:7px;align-items:flex-start;color:#6a788c;font-size:11px;margin-bottom:16px}
+.pa-scope svg{margin-top:3px;color:#577aaf}
+.pa-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:17px}
+.pa-summary>div{border:1px solid #e3e8f0;background:#fff;border-radius:7px;padding:13px 15px}
+.pa-summary>div>span{display:block;color:#68768a;font-size:11px}
+.pa-summary strong{display:block;font-size:24px;line-height:1.4;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums}
+.pa-summary strong small{font-size:13px;color:#7c889b;font-weight:500}
+.pa-caveat{display:flex;align-items:flex-start;gap:8px;color:#8a632a;background:#fff8ea;border:1px solid #eddfc5;border-radius:6px;padding:10px 12px;margin:0 0 17px;font-size:11px;line-height:1.7}
+.pa-caveat svg{margin-top:2px}
+.pa-main-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr);gap:17px}
+.pa-section{background:#fff;border:1px solid #e1e7ef;border-radius:7px;min-width:0;overflow:hidden;margin-bottom:17px}
+.pa-section-heading{display:block;padding:17px 19px;border-bottom:1px solid #eaf0f5}
+.pa-section-heading h3{font-size:13px;font-weight:700;margin:0;color:#3b4f69}
+.pa-section-heading p{font-size:11px;line-height:1.6;margin-top:4px;color:#6b788c}
+.pa-reach{padding:14px 12px 3px}
+.pa-reach-row{display:grid;grid-template-columns:113px minmax(30px,1fr) 66px 41px 13px;gap:8px;align-items:center;width:100%;background:white;padding:9px 7px;border-radius:5px;font-size:11px;text-align:left;color:#66768d}
+.pa-reach-row:hover,.pa-reach-row.selected{background:#f0f5ff}
+.pa-reach-row>span:first-child{color:#465e7d}
+.pa-bar-track{display:block;background:#edf1f7;height:9px;border-radius:3px;overflow:hidden}
+.pa-bar-track>span{display:block;background:#5d80c8;height:100%;border-radius:3px}
+.pa-reach-row:first-child .pa-bar-track>span{background:#8199ba}
+.pa-reach-row>strong{font-variant-numeric:tabular-nums;text-align:right;font-size:12px;color:#3f5674}
+.pa-reach-row small{font-size:10px;font-weight:500;color:#75839a}
+.pa-rate{text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+.pa-reach-row>svg{color:#7e99bf}
+.pa-explanation{font-size:11px;color:#6b7b92;padding:13px 19px 16px;line-height:1.8;border-top:1px solid #edf0f6;margin-top:10px}
+.pa-logged{padding:7px 19px;margin:0}
+.pa-logged>div{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eef1f5;font-size:12px;color:#64768e}
+.pa-logged>div:last-child{border:0}
+.pa-logged dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;color:#3e5878}
+.pa-section>.pa-caveat{margin:9px 15px 15px}
+.pa-table-scroll{overflow:auto;scrollbar-width:thin}
+.pa-table-scroll table{border-collapse:collapse;width:100%;text-align:left;white-space:nowrap;font-size:12px}
+.pa-table-scroll th{padding:10px 17px;background:#fbfcfe;font-size:10px;color:#6c7d93;font-weight:600;border-bottom:1px solid #e7edf4}
+.pa-table-scroll td{padding:12px 17px;border-bottom:1px solid #ecf0f5;color:#5f738e;font-variant-numeric:tabular-nums;vertical-align:middle}
+.pa-table-scroll tr:last-child td{border-bottom:0}
+.pa-table-scroll td strong{display:block;font-weight:650;color:#435d7e;font-size:12px}
+.pa-table-scroll td small{display:block;font-size:10px;color:#6b7d97;margin-top:3px}
+.pa-table-scroll td a{display:flex;align-items:center;gap:4px;color:#5273ae;text-decoration:none;font-size:10px;margin-top:4px}
+.pa-table-scroll td a:hover{text-decoration:underline}
+.pa-table-scroll td.pa-milestones{min-width:190px;max-width:260px;white-space:normal;font-size:11px}
+.pa-inspection{display:inline-flex;align-items:center;gap:6px;margin-left:8px;border:1px solid #d2dff6;background:#f0f5ff;border-radius:4px;padding:2px 6px;color:#4b70b4;font-size:11px;font-weight:500}
+.pa-inspection button{display:grid;place-items:center;background:none;color:inherit;padding:2px}
+.pa-inline-empty{font-size:12px!important;color:#708198!important;text-align:center!important;padding:21px 17px!important;white-space:normal}
+.pa-definitions{border:1px solid #dfe6f0;background:#fff;border-radius:6px;font-size:11px;color:#637893}
+.pa-definitions summary{cursor:pointer;padding:13px 17px;font-weight:650;color:#506d94}
+.pa-definitions>div{padding:0 17px 15px}
+.pa-definitions p{line-height:1.85;margin-top:10px}
+.op-cohort-filter{display:flex;align-items:center;gap:8px;color:var(--op-muted);font-size:12px}
+.op-cohort-filter select{height:36px;background:white;border:1px solid #dbe2eb;border-radius:6px;padding:5px 25px 5px 9px;max-width:190px;color:#475b73;font-size:12px}
+@media(min-width:1151px) and (max-width:1350px){.pa-heading{align-items:flex-start;gap:16px}.pa-controls{gap:8px}.pa-controls select{max-width:177px}.pa-main-grid{grid-template-columns:minmax(0,1.5fr) minmax(220px,1fr);gap:13px}.pa-analytics{padding:17px}.pa-reach-row{grid-template-columns:98px minmax(20px,1fr) 51px 37px 10px;gap:5px}.pa-summary{gap:9px}.pa-summary>div{padding:12px}.pa-summary>div>span{font-size:10px}}
+.pa-value-filter{display:grid;gap:6px;min-width:210px;font-size:12px;color:var(--text-muted,#697582)}.pa-value-filter select{padding:9px;border:1px solid var(--border,#d7dce4);border-radius:6px;background:white;color:var(--text,#283442);font:inherit}.pa-value-filter select:focus-visible{outline:2px solid #3573c5;outline-offset:3px}
+
+.pa-value-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.pa-value-heading>div{max-width:620px}.pa-value-heading .pa-value-filter{flex:0 0 225px}@media(max-width:1000px){.pa-value-heading{flex-wrap:wrap}.pa-value-heading .pa-value-filter{flex-basis:100%}}
