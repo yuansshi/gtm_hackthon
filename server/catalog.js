@@ -64,4 +64,4 @@ export const competitors = {
 };
 
 export const pipelineStages = ['Matched', 'Contacted', 'Replied', 'Meeting booked', 'RFQ received', 'Engineering review', 'Quote sent', 'Trial / qualification', 'Closed won', 'Closed lost'];
-export const costs = { discovery: 2, enrichment: 5, graph_query: 1, outreach: 1, inference: 2, market_signals: 2 };
+export const costs = { discovery: 2, enrichment: 5, graph_query: 1, outreach: 1, inference: 2, market_signals: 2, people_research: 2 };

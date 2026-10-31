@@ -26,3 +26,6 @@ ICP-driven discovery and verification: [Prospect search](prospect-search.md). Se
 Dated signals and ongoing source checks: [Market signals](market-signals.md). Accepted public-event context does not confirm purchasing intent or an active buyer evaluation cycle; no broad market-telemetry provider is connected.
 
 Company lookup and qualification evidence: [Company enrichment](company-enrichment.md). Reviewed vendor estimates are not independent size/revenue verification. Source quote corroboration is limited to headquarters city/country, and live project company lookup remains unverified.
+
+
+Employment graph reasoning now supports source-reviewed published people and exact-version owner connection attestations. Native Kuzu current/former-employer traversals use reviewed domain identities and display supporting passages. Stale, changed, withdrawn or superseded evidence and revoked attestations cannot support warm paths. This is inspectable possible-introduction reasoning, not independently established employment overlap, acquaintance, authority or willingness. Education paths, confirmed buying-cycle reasoning and broad live telemetry remain incomplete. See [People and introductions](people-introductions.md).

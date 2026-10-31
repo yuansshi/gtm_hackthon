@@ -99,6 +99,32 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   app.post(base + '/source-intakes/:intake/dismiss', (req, res) => { parse(z.object({}).strict(), req.body); res.json(service.dismissWebsiteIntake(req.params.business, req.params.intake)); });
   app.patch(base + '/leads/:lead/selection', (req, res) => { const p = parse(z.object({ selected: z.boolean() }).strict(), req.body); service.selectLead(req.params.business, req.params.lead, p.selected); view(req, res); });
+  app.post(base + '/leads/:lead/people-research', (req, res) => {
+    const input = parse(z.object({ requestId: z.string().uuid(), revision, sourceUrl: z.string().max(2000), employerUrl: z.string().max(2000).nullable() }).strict(), req.body);
+    const run = service.startPeopleResearch(req.params.business, req.params.lead, input);
+    res.status(202).json({ ...service.snapshot(req.params.business), activePeopleResearchId: run.id });
+  });
+  const personDecision = { requestId: z.string().uuid(), revision, acknowledged: z.boolean() };
+  app.post(base + '/leads/:lead/people-research/:run/review', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, name: z.string().trim().min(1).max(200), role: z.string().trim().min(1).max(200), roleQuote: z.string().min(12).max(2000), formerEmployer: z.object({ name: z.string().min(1).max(200), quote: z.string().min(12).max(2000), identityQuote: z.string().min(12).max(600) }).strict().nullable() }).strict(), req.body);
+    res.json(await service.reviewPerson(req.params.business, req.params.lead, req.params.run, input));
+  });
+  app.post(base + '/leads/:lead/people-research/:run/dismiss', (req, res) => {
+    const input = parse(z.object({ revision }).strict(), req.body);
+    res.json(service.dismissPeopleResearch(req.params.business, req.params.lead, req.params.run, input.revision));
+  });
+  app.post(base + '/leads/:lead/people/withdraw', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, reviewId: z.string().uuid() }).strict(), req.body);
+    res.json(await service.withdrawPerson(req.params.business, req.params.lead, input));
+  });
+  app.post(base + '/leads/:lead/connections', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, reviewId: z.string().uuid(), relationship: z.enum(['worked_together', 'know_personally', 'can_request_intro']), note: z.string().max(500) }).strict(), req.body);
+    res.json(await service.attestConnection(req.params.business, req.params.lead, input));
+  });
+  app.post(base + '/leads/:lead/connections/revoke', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, connectionId: z.string().uuid() }).strict(), req.body);
+    res.json(await service.revokeConnection(req.params.business, req.params.lead, input));
+  });
   app.post(base + '/leads/:lead/enrich', async (req, res) => { await service.enrich(req.params.business, req.params.lead); view(req, res); });
   app.put(base + '/leads/:lead/signal-monitor', (req, res) => res.json(service.configureSignalMonitor(req.params.business, req.params.lead, parse(z.object({ revision, urls:z.array(z.string().max(2000)).min(1).max(2), enabled:z.boolean(), frequency:z.enum(['daily','weekly']), acknowledgedSchedule:z.boolean() }).strict(), req.body))));
   app.post(base + '/leads/:lead/signal-checks', (req, res) => {const run=service.startSignalCheck(req.params.business,req.params.lead,parse(z.object({requestId:z.string().uuid(),revision}).strict(),req.body));res.status(202).json({...service.snapshot(req.params.business),activeSignalRunId:run.id});});

@@ -7,6 +7,7 @@ import { ProspectSearch, ProspectSearchSummary } from './ProspectSearch.jsx';
 import { MarketSignals } from './MarketSignals.jsx';
 import { signalHold } from './market-signals.js';
 import { CompanyResearch } from './CompanyResearch.jsx';
+import { PeopleResearch } from './PeopleResearch.jsx';
 import { companyHoldReasons } from './company-evidence.js';
 
 const formatDate = value => {
@@ -64,7 +65,7 @@ function AccountPreview({ account, state, open, close, move, position, total, co
         </>}
         {tab === 'Company' && <CompanyResearch key={account.id} account={account} state={state} act={act} busy={busy} />}
         {tab === 'Signals' && <MarketSignals key={account.id} account={account} state={state} act={act} busy={busy} />}
-        {tab === 'Contacts' && <ContactResearch key={account.id} account={account} state={state} act={act} busy={busy} />}
+        {tab === 'Contacts' && <><ContactResearch key={account.id} account={account} state={state} act={act} busy={busy} /><PeopleResearch key={`people:${account.id}`} account={account} state={state} act={act} busy={busy} /></>}
         {tab === 'Evidence' && <>
           {account.customEvidence && <section className="ar-detail-section wi-provenance"><strong>{account.evidenceNeedsReview ? 'A fresh quoted-source review is required' : 'Owner-reviewed website evidence'}</strong><p>Exact source passages were reviewed by you before account admission. Their interpretation is a research hypothesis; buyer authority and intent remain unverified.</p><small>Reviewed {formatDate(account.evidenceReviewedAt)} · {account.sourceEvidenceState === 'needs_review' ? 'Quotes or published contact changed or could not be retrieved' : 'Supporting quotes retained'}</small></section>}
           <section className="ar-detail-section"><h3>Published company context</h3><ul className="ar-fact-list">{(account.facts || []).map((fact, index) => <li key={`${fact}-${index}`}><p>{fact}</p><SourceLink url={account.factEvidence?.[index]?.url || (index === 1 ? account.contactSource : account.source)}>Evidence source</SourceLink></li>)}</ul>{!account.facts?.length && <p>No published company facts are recorded.</p>}</section>

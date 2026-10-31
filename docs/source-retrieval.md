@@ -22,3 +22,6 @@ Six new integration tests exercise the curated entry point through the actual sh
 No production campaign is refreshed by these tests. Live primary-source compatibility is checked separately without writing to a workspace. Live provider credentials, actual delivery, and Snyk scans remain separate requirements.
 
 All 121 tests pass; production build and npm audit pass. Live Elliott leadership and Altec company pages were reachable through the curated entry point (4,075 and 2,673 retained characters respectively). Those compatibility checks wrote no campaign records and do not validate the semantic accuracy of the companies’ claims.
+
+
+Published-people research also uses this reader. The role URL must belong to the researched account. The optional employer identity URL may use another public company site; each page and all its redirects remain pinned to its own original site. No model or credential-bearing provider request is involved. Exact role/history/identity passages require owner review. Rechecking an accepted URL suspends its reviews when retrieval fails or supporting text is missing; an unchanged fetch does not renew the review. Details: [People and introductions](people-introductions.md).
