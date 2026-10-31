@@ -1,6 +1,6 @@
 # Shared public-source retrieval
 
-Curated account research, website intake/refresh, prospect-search source retrieval, and account signal monitoring use `server/public-source.js`. The curated path additionally restricts its initial host to the catalog/supplier/competitor allowlist. A separate DNS preflight never authorizes a later unpinned connection.
+Curated account research, website intake/refresh, prospect-search source retrieval, account signal monitoring, and company HQ-source corroboration use `server/public-source.js`. The curated path additionally restricts its initial host to the catalog/supplier/competitor allowlist. A separate DNS preflight never authorizes a later unpinned connection.
 
 ## Connection boundary
 

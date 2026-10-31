@@ -1,6 +1,7 @@
 import kuzu from 'kuzu';
 import path from 'node:path';
 import { signalFresh, signalHold } from '../src/market-signals.js';
+import { companyHoldReasons } from '../src/company-evidence.js';
 
 const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
 const relationships = {
@@ -40,8 +41,8 @@ export async function createGraph(directory) {
         }
         for (const lead of state.leads) {
           const companyId = prefix + 'company:' + lead.id;
-          await node('Company', companyId, lead.name, businessId, { leadId: lead.id, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null });
-          if (!lead.excludedReason && !signalHold(lead)) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
+          await node('Company', companyId, lead.name, businessId, { leadId: lead.id, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null, companyProfile:lead.companyProfile?.status==='reviewed'?lead.companyProfile:null });
+          if (!lead.excludedReason && !signalHold(lead) && !companyHoldReasons(lead,state).length) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
           await node('Signal', prefix + 'signal:' + lead.id, lead.signal.title, businessId, lead.signal);
           await edge('signal_for', prefix + 'signal:' + lead.id, companyId, businessId, lead.signal.source);
           for(const signal of (lead.marketSignals||[]).filter(signal=>signal.acceptedAt&&['accepted','needs_review'].includes(signal.status))){

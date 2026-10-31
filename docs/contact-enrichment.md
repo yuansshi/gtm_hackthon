@@ -37,3 +37,5 @@ Primary API reference: [Hunter API V2](https://hunter.io/api-documentation). Hun
 - Browser checks used an isolated SQLite copy, a clearly labeled synthetic account, and intercepted provider responses. They covered consent and credit labels, candidate review, HTTP-202 pending/poll flow, separate selection acknowledgement, recipient/version reset, fresh exact-message approval, accept-all acknowledgement, graph provenance, Escape, and no horizontal overflow at the normal 1280 × 720 desktop viewport. The main campaign received no synthetic contacts, vendor requests, or outcomes.
 
 Live verification requires a designated project Hunter key. Domain Search does not establish headquarters, current employment, buying authority, or LinkedIn ownership. No external email or LinkedIn message is sent. The existing public-address/MX path remains available without the provider.
+
+Vendor-company metadata uses a separate lookup/review path in the account’s Company tab. Company/contact requests share the project key, credit policy and workspace concurrency gate; company fields never silently replace selected contacts. Details: [Company enrichment](company-enrichment.md).

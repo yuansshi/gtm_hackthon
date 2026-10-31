@@ -15,9 +15,10 @@ import { createHunterProvider } from './hunter.js';
 import { createProspectSearchProvider } from './prospect-search-provider.js';
 import { createProspectSearch } from './prospect-search.js';
 import { excludedDomains, matchesExcludedDomain } from '../src/prospect-plan.js';
-import { createContactEnrichment, mergeAccountPeople, markContactProjection } from './contact-enrichment.js';
+import { createContactEnrichment, mergeAccountPeople, markContactProjection, markCompanyProjection } from './contact-enrichment.js';
 import { createMarketSignals, markSignalProjection } from './market-signals.js';
 import { activeSignals, signalHold, signalFresh, signalContext } from '../src/market-signals.js';
+import { companyHoldReasons, reviewedCompanyContext, hqCorroborated, draftCompanyEvidenceCurrent } from '../src/company-evidence.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
@@ -25,6 +26,7 @@ const findLead = (s, id) => { const lead = s.leads.find(l => l.id === id); if (!
 const findDraft = (s, id) => { const d = s.drafts.find(d => d.id === id); if (!d) throw new AppError(404, 'Draft not found in this business.', 'draft_not_found'); return d; };
 export function exclusionReason(lead, state) {
   if (signalHold(lead)) return 'Accepted negative market evidence places this account on hold. Review or explicitly withdraw the signal before qualification or outreach.';
+  const companyReasons=companyHoldReasons(lead,state);if(companyReasons.length)return companyReasons.join(' ');
   if (lead.evidenceNeedsReview) return 'Website evidence needs a new quoted-source review before qualification.';
   if (!/united states|\busa?\b/i.test(state.icp.regions) || lead.country !== 'United States') return 'Outside the currently supported US research collection.';
   if (!state.icp.segments.some(s => /OEM|manufacturer/i.test(s))) return 'The current research collection supports equipment OEM campaigns only.';
@@ -34,8 +36,9 @@ export function exclusionReason(lead, state) {
   return null;
 }
 const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
-const accountContextDigest = lead => digest({ source: lead.source, sourceIntakeId: lead.sourceIntakeId, facts: lead.facts, application: lead.application, signal: lead.signal, marketSignals: signalContext(lead), people: lead.people, contact: lead.contact, outcomes: lead.events?.filter(event => event.recordType === 'outcome').map(event => event.id) });
+const accountContextDigest = lead => digest({ source: lead.source, sourceIntakeId: lead.sourceIntakeId, facts: lead.facts, application: lead.application, signal: lead.signal, marketSignals: signalContext(lead), company:reviewedCompanyContext(lead), people: lead.people, contact: lead.contact, outcomes: lead.events?.filter(event => event.recordType === 'outcome').map(event => event.id) });
 const requireFreshSignals = (draft, lead) => { for (const id of draft.linkedSignalIds || []) if (!signalFresh((lead.marketSignals || []).find(signal => signal.id === id) || {})) throw new AppError(409, 'Linked market evidence changed or expired. Refresh/review the source and prepare the draft again before approval or dispatch.', 'stale_market_signal'); };
+const requireFreshCompany = (draft,lead) => {if(!draftCompanyEvidenceCurrent(draft,lead))throw new AppError(409,'The company evidence used by this model draft changed or expired. Prepare a fresh draft from current reviewed HQ evidence before approval or dispatch.','stale_company_context');};
 
 export function metrics(state, { asOf } = {}) {
   const reached = stage => state.leads.filter(l => l.events.some(e => e.stage === stage)).length;
@@ -66,7 +69,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), prospectSearch: prospectProvider.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
   const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
   const prospectSearch = createProspectSearch({ store, provider: prospectProvider, readSource: readWebsiteSource, stageIntake: websiteIntake.stageSearchIntake, snapshot, profileDigest });
-  const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible });
+  const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible, exclusionReason, readSource:readWebsiteSource });
   const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
   const marketSignals = createMarketSignals({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
   const updateProfile = (s, incoming) => {
@@ -191,7 +194,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
             if (existing) {
               const newlyStale = lead.customEvidence && lead.evidenceNeedsReview && !existing.evidenceNeedsReview;
               const preserved = { selected: lead.evidenceNeedsReview ? false : existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact };
-              Object.assign(existing, lead, preserved, { people: mergeAccountPeople(lead.people, existing.vendorPeople), excludedReason: exclusionReason({ ...lead, marketSignals: existing.marketSignals }, s) });
+              Object.assign(existing, lead, preserved, { people: mergeAccountPeople(lead.people, existing.vendorPeople), excludedReason: exclusionReason({ ...lead, marketSignals: existing.marketSignals, companyProfile:existing.companyProfile }, s) });
               if (newlyStale) invalidateAccountDrafts(s, existing.id, { reason: 'account_source_changed', intakeId: lead.sourceIntakeId });
             } else s.leads.push({ ...lead, excludedReason: exclusionReason(lead, s) });
             if (lead.customEvidence && lead.evidenceNeedsReview) { const candidate = s.customCandidates?.find(item => item.id === lead.id); if (candidate) candidate.evidenceNeedsReview = true; }
@@ -267,8 +270,10 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     let generated;
     try {
       const signals=activeSignals(account);
-      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...signals.map(signal=>signal.source), ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
-      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep };
+      const hq=account.companyProfile?.status==='reviewed'?account.companyProfile.fields.headquarters:null;
+      const companyHeadquarters=hqCorroborated(hq)?{city:hq.city,country:hq.country,quote:hq.corroboration.text,sourceUrl:hq.corroboration.url,qualification:'Owner-reviewed company-source HQ city/country only; other address components, firmographics and buying intent remain unverified.'}:null;
+      const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...signals.map(signal=>signal.source), ...(companyHeadquarters?[companyHeadquarters.sourceUrl]:[]), ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
+      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep };
       generated = await model.draft({ context, sources, requestId });
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {
         const lead = findLead(s, leadId); requireEligible(lead, s);
@@ -276,7 +281,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
         if (!s.approved || !lead.selected) throw new AppError(409, 'Account or profile approval changed during generation.', 'stale_assistant_context');
         const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep], recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
           subject: generated.value.subject, body: generated.value.body, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
-          profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(), linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: digest({context:signalContext(lead),usableIds:activeSignals(lead).map(signal=>signal.id)}), generation: `OpenAI / ${generated.metadata.model}; human review required`, sources: [...new Set(generated.value.claims.map(c => c.sourceUrl))], actor: 'Model drafting agent', modelMetadata: generated.metadata, assistantRunId: run.id };
+          profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(), linkedCompanyReviewId:companyHeadquarters?account.companyProfile.id:null, linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: digest({context:signalContext(lead),usableIds:activeSignals(lead).map(signal=>signal.id)}), generation: `OpenAI / ${generated.metadata.model}; human review required`, sources: [...new Set(generated.value.claims.map(c => c.sourceUrl))], actor: 'Model drafting agent', modelMetadata: generated.metadata, assistantRunId: run.id };
         s.drafts.unshift(d); currentRun.draftId = d.id;
       });
       return { ...snapshot(id), activeDraftId: store.read(id).assistantRuns.find(r => r.id === run.id).draftId };
@@ -299,6 +304,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (d.status !== 'draft' && d.status !== 'rejected') throw new AppError(409, 'Only an editable draft can be approved.', 'draft_locked');
     requireEligible(findLead(s, d.leadId), s);
     requireFreshSignals(d, findLead(s, d.leadId));
+    requireFreshCompany(d, findLead(s,d.leadId));
     if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
@@ -318,6 +324,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       const lead = findLead(s, d.leadId);
       requireEligible(lead, s);
       requireFreshSignals(d, lead);
+      requireFreshCompany(d,lead);
       if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
       s.wallet.credits -= costs.outreach; s.wallet.ledger.unshift({ id: randomUUID(), kind: 'outreach', leadId: lead.id, credits: costs.outreach, status: 'consumed', externalStatus: 'not_connected', mode: 'dry_run', at: now() });
       d.status = 'simulated'; d.sentAt = now(); d.deliveryMode = 'dry_run'; d.deliveryId = randomUUID();
@@ -336,8 +343,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   }).state;
   const graphView = async id => {
     const reservation = store.reserve(id, 'graph_query', costs.graph_query);
-    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); markSignalProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); const marketPaths = graph.marketPaths ? await graph.marketPaths(id) : []; store.settle(id, reservation, true); return { ...data, paths, marketPaths }; }
+    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); markCompanyProjection(store, id, state); markSignalProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); const marketPaths = graph.marketPaths ? await graph.marketPaths(id) : []; store.settle(id, reservation, true); return { ...data, paths, marketPaths }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, configureSignalMonitor: marketSignals.configure, startSignalCheck: marketSignals.start, reviewMarketSignal: marketSignals.review, tickSignals: marketSignals.tick, drainSignals: marketSignals.drain, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
+  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, configureSignalMonitor: marketSignals.configure, startSignalCheck: marketSignals.start, reviewMarketSignal: marketSignals.review, tickSignals: marketSignals.tick, drainSignals: marketSignals.drain, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), lookupCompany:contactEnrichment.company, applyCompany:contactEnrichment.applyCompany, withdrawCompany:contactEnrichment.withdrawCompany, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
 }

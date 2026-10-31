@@ -21,6 +21,9 @@ flowchart LR
   Events --> Graph
   Consent --> Hunter[Hunter search + dated email checks]
   Hunter --> Contact[Human contact selection]
+  Consent --> CompanyLookup[Hunter company lookup]
+  CompanyLookup --> CompanyReview[Selected fields + HQ source review]
+  CompanyReview --> Policy
   Contact --> Policy
   Policy --> DryRun[Approved dry-run receipt]
 ```
@@ -143,3 +146,14 @@ Reviewed events project to native Signal nodes and directional signal_for edges.
 ## Shared public-page transport
 
 Curated research now uses the same DNS-pinned HTTPS reader as website intake, custom-account refresh, prospect retrieval and market signals. The initial curated host remains allowlisted, every redirect stays within the original company host (with the www alias), and each connection pins a freshly validated public address while preserving TLS hostname checks. The shared reader imposes one 15-second deadline, 1 MB HTML and 48,000 retained characters. The former generic-fetch path is removed. Fixed official provider API requests remain separate. See [Source retrieval](source-retrieval.md) and its integration evidence.
+
+
+## Company enrichment and qualification
+
+The project Hunter adapter supports fixed `companies/find` requests with the stored account domain and the documented Clearbit-style schema. Company and contact work share reservation/concurrency/restart protections. Request consent, current revision, profile/account-source fingerprints, project configuration and credit availability precede work. A valid 404 no-match completes/consumes the lookup; failure refunds local credits without asserting a vendor refund. Processing restrictions persist across campaign reset. Up to 30 company lookups are retained per campaign.
+
+The adapter retains bounded company fields and vendor indexing date, discarding unrelated phone/email/social/identifier/coordinate payloads. Current company pages are independently retrieved through the shared pinned reader. Company application accepts only selected field keys from an exact completed run, plus uncertainty acknowledgement. Optional HQ corroboration requires a source-member exact passage naming headquarters, returned city and country from a source under 24 hours old. This supports city/country for 30 days, rather than independent verification of the whole vendor record.
+
+Employee range comparison is local, distinguishes overlap/conflict/unknown, and never awards confirmed-size points. Revenue/currency and classification-edition uncertainty remain explicit. HQ country is a qualification boundary only by explicit choice; US operating locations are not silently equated to global headquarters. Reviewed non-overlapping employee ranges, selected out-of-territory HQ criteria, stale/source-changed company profiles and processing restrictions hold qualification. Owner withdrawal removes the profile effect without reselecting the account.
+
+Reviews persist before graph projection and repair without repeating charges/version invalidations. Source refresh preserves the profile and its hold; Company node data and inspectors retain vendor/source provenance. Unsent drafts advance versions and clear approval on company decisions. Model requests can include only current corroborated public HQ evidence from these fields, with a linked company review checked at approval/dry run; estimates are not asserted in copy. No stage outcomes, contacts, sent receipts or industry cohorts are rewritten. See [Company enrichment](company-enrichment.md).
