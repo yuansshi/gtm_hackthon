@@ -1,5 +1,6 @@
 import { messageBriefSchema } from './message-brief.js';
 import {managementSchema} from './lead-management.js';
+import {intakeFields} from './intake.js';
 import express from 'express';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -16,7 +17,7 @@ const profile = z.object({
   company: z.object({ name: text, website: text, description: text }).strict(),
   productFamilies: strings,
   capabilities: z.record(z.string().max(100), z.object({ value: text, status: z.enum(['unknown', 'website', 'reviewed']) }).strict()),
-  commercial: z.object({ certification: text, leadTime: text, minimumOrder: text, deliveryTerms: text, quoteBasis: text }).strict(),
+  commercial: z.object({ certification: text, leadTime: text, minimumOrder: text, deliveryTerms: text, quoteBasis: text,monetizationModel:z.string().max(600).optional(),pricingFramework:z.string().max(600).optional(),targetContractValue:z.string().max(600).optional() }).strict(),
   icp: z.object({ industries: text, regions: text, segments: strings, roles: strings, motion: z.enum(['', 'replacement', 'oem', 'channel']), exclusions: text,
     naics: text.optional(), headcount: text.optional(), revenue: text.optional(), triggers: text.optional(), referenceWins: text.optional(), excludedDomains: text.optional() }).strict(),
   expansionDecisions: z.record(z.string().max(100), z.enum(['accepted', 'rejected', 'undecided'])),
@@ -140,7 +141,7 @@ export function createApp({ service, store, accessToken = '', secureCookies = fa
     res.json(await service.inferProfile(req.params.business, p));
   });
   app.post(base + '/assistant/intake/:run/review', (req, res) => {
-    const p = parse(z.object({ revision, acknowledged: z.boolean(), decisions: z.array(z.object({ field: z.string().max(100), decision: z.enum(['accepted', 'adjusted', 'dismissed']), value: z.union([text, strings]).optional() }).strict()).max(12) }).strict(), req.body);
+    const p = parse(z.object({ revision, acknowledged: z.boolean(), decisions: z.array(z.object({ field: z.string().max(100), decision: z.enum(['accepted', 'adjusted', 'dismissed']), value: z.union([text, strings]).optional() }).strict()).max(intakeFields.length) }).strict(), req.body);
     res.json(service.reviewIntake(req.params.business, req.params.run, p));
   });
   app.put(base + '/profile', (req, res) => {

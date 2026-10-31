@@ -1,5 +1,6 @@
 import { createBandProvider } from './band-provider.js';
 import { createLeadManagement } from './lead-management.js';
+import {commercialIntakeKey,intakeFieldValue,outreachResearchBrief} from '../src/commercial-planning.js';
 import { createBandCoordination } from './band-coordination.js';
 import { checkedMessageBrief, requireMessageBrief, messageBriefInstructions, briefTemplate } from './message-brief.js';
 import { randomUUID } from 'node:crypto';
@@ -97,7 +98,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   const buyingEvidence = createBuyingEvidence({ store, graph, competitors, snapshot, exclusionReason });
   const updateProfile = (s, incoming) => {
     const before = profileDigest(s);
-    const previousIcp = structuredClone(s.icp);
+    const previousValues = Object.fromEntries(Object.keys(s.assistantFieldProvenance||{}).map(field=>[field,structuredClone(intakeFieldValue(s,field))]));
     const supplierHash = value => digest({ company: value.company, products: value.productFamilies, capabilities: value.capabilities, commercial: value.commercial });
     const previousSupplier = supplierHash(s);
     for (const key of profileKeys) if (incoming[key] !== undefined) s[key] = incoming[key];
@@ -106,7 +107,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       for (const link of s.buyingLinks || []) if (link.status === 'reviewed') { link.status = 'needs_review'; link.reviewReason = 'Business profile changed.'; }
       for (const draft of s.drafts) if (!lockedDraftStatuses.includes(draft.status)) { draft.approvedHash = null; draft.status = 'draft'; }
       for (const lead of s.leads) { lead.excludedReason = exclusionReason(lead, s); if (lead.excludedReason) lead.selected = false; }
-      for (const field of Object.keys(s.assistantFieldProvenance || {})) if (JSON.stringify(previousIcp[field]) !== JSON.stringify(s.icp[field]) || (s.assistantFieldProvenance[field].basis === 'catalog_hypothesis' && previousSupplier !== supplierHash(s))) delete s.assistantFieldProvenance[field];
+      for (const field of Object.keys(s.assistantFieldProvenance || {})) if (JSON.stringify(previousValues[field]) !== JSON.stringify(intakeFieldValue(s,field)) || (s.assistantFieldProvenance[field].basis === 'catalog_hypothesis' && previousSupplier !== supplierHash(s))) delete s.assistantFieldProvenance[field];
       addActivity(s, 'Profile updated', 'Research and unsent-message approvals cleared because campaign context changed.');
     }
     s.profileImported = true;
@@ -163,7 +164,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       if (!run || run.status !== 'completed') throw new AppError(404, 'Completed intake proposal not found in this business.', 'proposal_not_found');
       if (run.reviewedAt) throw new AppError(409, 'This proposal has already been reviewed.', 'proposal_already_reviewed');
       if (profileDigest(s) !== run.profileHash) throw new AppError(409, 'The profile changed. Request a new proposal before applying suggestions.', 'stale_assistant_context');
-      const fields = new Set(); const icp = { ...s.icp }; const accepted = [];
+      const fields = new Set(); const icp = { ...s.icp }; const commercial={...s.commercial}; const accepted = [];
       for (const d of decisions) {
         const suggestion = run.result.suggestions.find(p => p.field === d.field);
         if (!suggestion || fields.has(d.field)) throw new AppError(400, 'Review only unique fields from this proposal.', 'invalid_proposal_field');
@@ -171,10 +172,10 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
         if (d.decision === 'dismissed') continue;
         const value = d.decision === 'accepted' ? suggestion.value : d.value;
         if (!validIntakeValue(d.field, value)) throw new AppError(400, 'An adjusted field has an invalid value.', 'invalid_proposal_value');
-        icp[d.field] = value; accepted.push({ ...suggestion, value, decision: d.decision });
+        const key=commercialIntakeKey(d.field);if(key)commercial[key]=value;else icp[d.field] = value; accepted.push({ ...suggestion, value, decision: d.decision });
       }
       if (fields.size !== run.result.suggestions.length) throw new AppError(400, 'Accept, adjust, or dismiss every suggested field.', 'incomplete_proposal_review');
-      updateProfile(s, { icp }); s.assistantFieldProvenance ||= {};
+      updateProfile(s, { icp,commercial }); s.assistantFieldProvenance ||= {};
       for (const field of accepted) s.assistantFieldProvenance[field.field] = { ...field, confidence: field.decision === 'adjusted' ? 1 : field.confidence, basis: field.decision === 'adjusted' ? 'Owner-adjusted target' : field.basis, method: run.mode === 'model' ? 'Uncalibrated model suggestion reviewed by owner' : 'Explicit local extraction reviewed by owner', runId, reviewedAt: now() };
       run.decisions = decisions; run.reviewedAt = now(); run.acceptedFields = accepted.map(f => f.field);
       addActivity(s, 'ICP suggestions reviewed', `${accepted.length} accepted or adjusted; ${decisions.length - accepted.length} dismissed. Any profile changes revoke prior research and unsent-message approvals.`, 'You');
@@ -305,7 +306,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       const hq=account.companyProfile?.status==='reviewed'?account.companyProfile.fields.headquarters:null;
       const companyHeadquarters=hqCorroborated(hq)?{city:hq.city,country:hq.country,quote:hq.corroboration.text,sourceUrl:hq.corroboration.url,qualification:'Owner-reviewed company-source HQ city/country only; other address components, firmographics and buying intent remain unverified.'}:null;
       const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...signals.map(signal=>signal.source), ...(companyHeadquarters?[companyHeadquarters.sourceUrl]:[]), ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
-      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep, ...(brief ? { messageBrief: messageBriefInstructions(brief) } : {}) };
+      const context = { supplier: outreachResearchBrief(createResearchBrief(initial)), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep, ...(brief ? { messageBrief: messageBriefInstructions(brief) } : {}) };
       generated = await model.draft({ context, sources, requestId });
       requireMessageBrief({ ...generated.value, messageBrief: brief }, true);
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {

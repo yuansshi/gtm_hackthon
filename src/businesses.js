@@ -1,4 +1,5 @@
 // Public website statements are starting evidence, not verified manufacturing limits.
+import {commercialPlanningFields} from './commercial-planning.js';
 export const businesses = [
   {
     id: 'huasheng', name: 'Huasheng Castings', initials: 'HS', color: 'blue',
@@ -135,9 +136,10 @@ export function profileConfidence(state) {
     ['headcount', state.icp.headcount, 'Owner-defined target; account size unverified'],
     ['revenue', state.icp.revenue, 'Owner-defined target; account revenue unverified'],
     ['triggers', state.icp.triggers, 'Owner-defined research signal'],
-  ].map(([field, value, basis]) => {
+    ...commercialPlanningFields.map(({key,label})=>['commercial.'+key,state.commercial?.[key],'Owner-supplied internal plan; not a quote',label]),
+  ].map(([field, value, basis,label]) => {
     const provenance = state.assistantFieldProvenance?.[field];
-    if (provenance && JSON.stringify(provenance.value) === JSON.stringify(value)) return { field, value, confidence: provenance.confidence, basis: { user_input: 'Campaign owner input', catalog_hypothesis: 'Catalog hypothesis, reviewed as a target' }[provenance.basis] || provenance.basis, evidence: provenance.evidence, method: provenance.method, runId: provenance.runId, reviewedAt: provenance.reviewedAt };
-    return { field, value, confidence: known(value) ? (['regions', 'segments'].includes(field) ? 1 : 0.5) : 0, basis: known(value) ? basis : 'Unknown / not supplied', method: 'Evidence coverage heuristic; not calibrated confidence' };
+    if (provenance && JSON.stringify(provenance.value) === JSON.stringify(value)) return { field, ...(label?{label}:{}), value, confidence: provenance.confidence, basis: { user_input: 'Campaign owner input', catalog_hypothesis: 'Catalog hypothesis, reviewed as a target' }[provenance.basis] || provenance.basis, evidence: provenance.evidence, method: provenance.method, runId: provenance.runId, reviewedAt: provenance.reviewedAt };
+    return { field, ...(label?{label}:{}), value, confidence: known(value) ? (['regions', 'segments'].includes(field) ? 1 : 0.5) : 0, basis: known(value) ? basis : 'Unknown / not supplied', method: 'Evidence coverage heuristic; not calibrated confidence' };
   });
 }

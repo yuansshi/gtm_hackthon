@@ -10,6 +10,9 @@ const directory = process.env.DATA_DIR;
 assert.ok(directory && path.isAbsolute(directory) && !directory.endsWith('/.data'), 'Use an isolated data volume.');
 const moduleAt = name => import(pathToFileURL(path.resolve('server',name)).href);
 const leadId = 'deployment-fixture';
+// Synthetic owner inputs, never supplier prices or verified contract economics.
+const commercialPlan = {monetizationModel:'Synthetic manufacturing per order',pricingFramework:'Synthetic quote after drawing review',targetContractValue:'USD 25,000–50,000 per synthetic order'};
+const assertCommercialPlan = state => {for(const [key,value] of Object.entries(commercialPlan))assert.equal(state.commercial[key],value);};
 
 if (phase === 'seed') {
   const {createStore} = await moduleAt('store.js');
@@ -33,6 +36,7 @@ if (phase === 'seed') {
   try {
     const state = store.read('allco');
     assert.equal(state.signalFixture,true);assert.equal(state.wallet.credits,123);
+    assertCommercialPlan(state);
     assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');
     assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');
     assert.equal(state.leads[0].management.nextAction.text,'Review synthetic supplier requirements');
@@ -45,6 +49,7 @@ if (phase === 'seed') {
       assert.ok(snapshot.edges.some(e=>e.type==='replied_to'));
       assert.ok((await graph.paths('allco')).length>0);
       assert.ok(!JSON.stringify(snapshot).includes('Synthetic Sales Owner'));
+      assert.ok(!JSON.stringify(snapshot).includes(commercialPlan.targetContractValue));
       assert.equal((await graph.snapshot('huasheng')).nodes.length,0);
     } finally {await graph.close();}
   } finally {store.close();}
@@ -77,10 +82,11 @@ if (phase === 'seed') {
   let state=await json('/api/businesses/allco');assert.equal(state.signalFixture,true,'Refuse to mutate a non-fixture workspace.');assert.equal(state.leads[0].id,leadId);
   if(phase==='exercise') {
     assert.equal(state.wallet.credits,100);assert.equal(state.drafts.length,0);
-    state=await json('/api/businesses/allco/assistant/intake','POST',{message:'Target United States OEMs with 50-500 employees.',mode:'local',requestId:randomUUID(),acknowledgedExternalProcessing:false,revision:state.revision});
+    state=await json('/api/businesses/allco/assistant/intake','POST',{message:`Target United States OEMs with 50-500 employees.\nMonetization model: ${commercialPlan.monetizationModel}\nPricing framework: ${commercialPlan.pricingFramework}\nTarget contract value: ${commercialPlan.targetContractValue}`,mode:'local',requestId:randomUUID(),acknowledgedExternalProcessing:false,revision:state.revision});
     const run=state.assistantRuns.find(r=>r.id===state.activeAssistantRunId);assert.ok(run.result.suggestions.length>0);
     state=await json(`/api/businesses/allco/assistant/intake/${run.id}/review`,'POST',{revision:state.revision,acknowledged:true,decisions:run.result.suggestions.map(s=>({field:s.field,decision:'accepted'}))});
     assert.match(state.icp.regions,/United States/);assert.ok(state.icp.segments.some(s=>/OEM|manufacturer/i.test(s)));
+    assertCommercialPlan(state);
     state=await json('/api/businesses/allco/approve','POST',{acknowledged:true,revision:state.revision});assert.equal(state.approved,true);
     state=await json(`/api/businesses/allco/leads/${leadId}/selection`,'PATCH',{selected:true});
     const graph=await json('/api/businesses/allco/graph/query','POST',{});assert.match(graph.engine,/Kuzu/);assert.ok(graph.paths.length>0);assert.ok(graph.edges.some(e=>e.type==='matched_to'));
@@ -103,6 +109,7 @@ if (phase === 'seed') {
   } else {
     assert.equal(state.wallet.credits,123);assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');assert.equal(state.leads[0].stage,'Replied');assert.equal(state.metrics.simulated,1);assert.equal(state.metrics.replied,1);
     assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');assert.equal(state.leads[0].management.nextAction.status,'open');
+    assertCommercialPlan(state);
     const before=state.wallet.credits;state=await json(`/api/businesses/allco/drafts/${state.drafts[0].id}/simulate`,'POST',{});assert.equal(state.wallet.credits,before);assert.equal(state.metrics.simulated,1);
     console.log('Fresh server sessions read persisted campaign state; replay does not create a second receipt/debit.');
   }

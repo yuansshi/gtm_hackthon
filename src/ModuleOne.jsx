@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronDown, Download, ExternalLink, FileCheck2, Layers3, Plus, Save, ShieldCheck, Target } from 'lucide-react';
 import { missingResearchFields } from './businesses';
 import GuidedIntake, { ConfidencePanel } from './GuidedIntake';
+import {commercialPlanningFields} from './commercial-planning.js';
 
 const tabs = [
   { title: 'Company & products', icon: Layers3 },
@@ -55,6 +56,8 @@ export default function ModuleOne({ business, state, change: commitChange, appro
             <div className="field-grid"><Field id="lead-time" label="Typical production lead time" value={state.commercial.leadTime} onChange={v => update('commercial', 'leadTime', v)} placeholder="Not confirmed" /><Field id="minimum-order" label="Minimum order / typical quantity" value={state.commercial.minimumOrder} onChange={v => update('commercial', 'minimumOrder', v)} placeholder="Not confirmed" /></div>
             <Field id="delivery-terms" label="Delivery regions & shipping terms" value={state.commercial.deliveryTerms} onChange={v => update('commercial', 'deliveryTerms', v)} placeholder="Confirm available destinations, freight basis, and terms" />
             <Field id="quote-basis" label="Quotation basis" value={state.commercial.quoteBasis} onChange={v => update('commercial', 'quoteBasis', v)} />
+            <div className="form-divider"/><div className="section-heading"><div><h2>Internal commercial plan</h2><p>Owner-supplied planning inputs. Customer quotations require separate review.</p></div></div>
+            {commercialPlanningFields.map(({key,label,help})=><Field key={key} id={'commercial-'+key} label={label} value={state.commercial[key]||''} onChange={v=>update('commercial',key,v)} maxLength={600} placeholder="Not supplied" help={help}/>)}
           </>}
           {tab === 2 && <>
             <div className="section-heading"><div><h2>Ideal customer profile</h2><p>Choose the commercial direction for this business’s prospect research.</p></div><span className="pill blue">Proposed · editable</span></div>

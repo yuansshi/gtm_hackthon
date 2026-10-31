@@ -1,8 +1,10 @@
 // Deliberately bounded local extraction. No model or external service is used.
-export const intakeFields = ['industries', 'regions', 'segments', 'roles', 'motion', 'naics', 'headcount', 'revenue', 'triggers', 'referenceWins', 'exclusions', 'excludedDomains'];
+import {commercialPlanningFields,commercialIntakeFields} from '../src/commercial-planning.js';
+export const intakeFields = ['industries', 'regions', 'segments', 'roles', 'motion', 'naics', 'headcount', 'revenue', 'triggers', 'referenceWins', 'exclusions', 'excludedDomains',...commercialIntakeFields];
 export const arrayFields = ['segments', 'roles'];
 export function validIntakeValue(field, value) {
   if (!intakeFields.includes(field)) return false;
+  if(commercialIntakeFields.includes(field))return typeof value==='string'&&!!value.trim()&&value.length<=600;
   if (arrayFields.includes(field)) return Array.isArray(value) && value.length > 0 && value.length <= 20 && value.every(v => typeof v === 'string' && v.trim() && v.length <= 200);
   if (typeof value !== 'string' || !value.trim() || value.length > 3000) return false;
   return field !== 'motion' || ['oem', 'replacement', 'channel'].includes(value);
@@ -37,9 +39,16 @@ export function localIntake(message) {
     const values = domains[1].split(/[\s,]+/).filter(d => /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(d));
     if (values.length) add('excludedDomains', values.join(', '), domains[0]);
   }
+  for(const {key,label} of commercialPlanningFields){
+    const expression=new RegExp('(?:^|[;\\n])\\s*'+label+'\\s*[:=]\\s*([^;\\n]+)','gi');
+    const matches=[...message.matchAll(expression)],values=[...new Set(matches.map(match=>match[1].trim()))];
+    if(values.length>1){questions.push(`Multiple ${label.toLowerCase()} values were supplied. Reconcile them in the form.`);continue;}
+    if(values[0]?.length>600){questions.push(`Keep ${label.toLowerCase()} within 600 characters; no partial value was extracted.`);continue;}
+    if(values[0])add('commercial.'+key,values[0],values[0]);
+  }
   if (!regions.length) questions.push('Which countries should this campaign target?');
   if (!oem) questions.push('Which buyer segment and sales motion should the campaign use?');
   if (!suggestions.length) questions.push('Use the detailed form for product, reference-win, pricing, and qualification information.');
   return { summary: `${suggestions.length} explicit field suggestions extracted locally.`, suggestions, questions,
-    caveats: ['Local extraction supports territory, OEM motion, employee ranges, explicit NAICS/SIC codes, and excluded domains.', 'Extraction confidence describes matching your words, not verification of an account or its buying intent.'] };
+    caveats: ['Local extraction supports territory, OEM motion, employee ranges, explicit NAICS/SIC codes, excluded domains, and explicitly labeled commercial planning inputs.', 'Extraction confidence describes matching your words, not verification of an account, price or buying intent.'] };
 }
