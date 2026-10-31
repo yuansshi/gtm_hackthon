@@ -14,7 +14,7 @@ export const publicDraft = d => ({ ...d, approvedHash: d.approvedHash || null })
 
 export function initialRuntime(id) {
   return {
-    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
+    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
     wallet: { credits: 100, initialCredits: 100, currency: 'demo credits', ledger: [] },
     version: 2, revision: 0, serverPersisted: true,
   };
@@ -32,6 +32,7 @@ export function recoverInterruptedWork(store) {
     store.mutate(id, state => {
       for (const job of state.jobs.filter(job => job.status === 'running')) { job.status = 'failed'; job.error = 'Server restarted; reserved credits refunded. Start a new research request.'; job.completedAt = now(); }
       for (const intake of state.sourceIntakes || []) if (intake.status === 'running') { intake.status = 'failed'; intake.error = 'Server restarted; reserved credits refunded. Start a new source request.'; intake.errorCode = 'interrupted_request'; intake.completedAt = now(); }
+      for (const run of (state.enrichmentRuns || []).filter(run => ['running', 'pending'].includes(run.status))) { run.status = 'failed'; run.error = 'Server restarted. Local credits were refunded; vendor billing may differ. No contact request will replay automatically.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); const entry = state.wallet.ledger.find(entry => entry.id === run.reservation); if (entry) entry.externalStatus = 'provider_unknown'; }
       for (const run of (state.assistantRuns || []).filter(run => run.status === 'running')) { run.status = 'failed'; run.error = 'Server restarted. No model request will be replayed automatically. Local credits were refunded; provider billing may differ.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); }
     });
   }

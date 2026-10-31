@@ -15,12 +15,12 @@ npm start
 
 Open **http://127.0.0.1:3001**. The Express server serves both the API and production UI. For UI development, run `npm run server` and `npm run dev` in two terminals; Vite proxies `/api` to port 3001. `npm run preview` also requires the backend.
 
-The supplied `.env.example` contains dummy Band and Flexprice placeholders. The application does not send requests to Band or Flexprice or infer a verified connection from the presence of a key. AI is disabled by default. Do not put personal keys here.
+The supplied `.env.example` contains dummy Band and Flexprice placeholders. The application does not send requests to Band or Flexprice or infer a verified connection from the presence of a key. AI and Hunter contact research are disabled by default. Do not put personal keys here.
 
 ## Try the five-module flow
 
 1. **Product & ICP:** review company products and capabilities; choose target industries, territory, roles, size criteria, classification, triggers, reference wins, and domain exclusions. A local guided intake recognizes explicit US/Canada/Mexico, OEM, employee-range, NAICS/SIC, and excluded-domain statements. Every proposal is persisted for accept/adjust/dismiss review; it cannot apply itself. Optional project-model intake uses strict structured output and the same review gate. Confirm the profile review and approve for research. Editing the profile revokes research and unsent-message approvals.
-2. **Discovery:** run source research (2 demo credits) over curated and owner-admitted US OEMs, or choose **Research a website** to fetch up to two company pages (2 credits). Review exact company, manufacturer, US-location, and application evidence before adding a new account; it is not automatically shortlisted. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority.
+2. **Discovery:** run source research (2 demo credits) over curated and owner-admitted US OEMs, or choose **Research a website** to fetch up to two company pages (2 credits). Review exact company, manufacturer, US-location, and application evidence before adding a new account; it is not automatically shortlisted. Inspect each company's application hypothesis, citations, named public leaders, fit breakdown, unknowns, and timestamped fetch successes/failures. Shortlist an account. Public contact + DNS MX checking costs 5 credits; MX never establishes mailbox deliverability or buyer authority. The account’s **Contacts** tab also supports optional project-enabled Hunter search and selected-address verification (5 credits each), followed by an explicit contact/source review. Selecting a contact updates editable unsent recipients and requires new message approval.
 3. **Knowledge graph:** query the native Kuzu database (1 credit), inspect directional relationships and their evidence, and follow Person → Company → Product paths. The graph also retains published previous-employer relationships and local outreach events.
 4. **Outreach:** prepare email or LinkedIn drafts with A/B variants and day 0/3/7 follow-ups. Templates cite the account's application and this supplier's website. Edit, save, reject, or approve the exact version. Approval is bound on the server to business, profile, recipient, subject, body, channel, sequence step, and message version. Recording a dry run costs 1 credit and sends **nothing externally**. Duplicate sends are idempotent; both A/B variants cannot be dispatched to the same account/channel/step.
 5. **Pipeline:** move accounts through Matched, Contacted, Replied, Meeting booked, RFQ received, Engineering review, Quote sent, Trial / qualification, Closed won/lost. Counts use recorded events, with actor and timestamp. Dry-run messages and user-reported outcomes are identified separately. Segmented and A/B counts are descriptive observations.
@@ -34,7 +34,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | Persistence | SQLite workspace transactions, revision checks, restart recovery for interrupted credit reservations |
 | Graph | Native Kuzu 0.11.3, parameterized Cypher, business-scoped nodes/edges, persistent multi-hop queries |
 | Research | Curated companies and quoted-source website intake + live source retrieval; owner-reviewed admission beyond the fixed catalog; not autonomous prospect search |
-| Contact enrichment | Public general company addresses + DNS MX; no vendor or verified personal mailbox |
+| Contact enrichment | Public addresses/MX plus optional Hunter V2 search and verifier, dated check labels, persona/source review, and recipient/version reset; fixture and public test API checked, live project enrichment unverified |
 | ICP confidence | Visible 0–1 coverage plus provenance for reviewed local/model suggestions; not calibrated probabilities |
 | Drafting | Source-grounded templates by default; optional credential-gated OpenAI structured drafts with required account/supplier citations, proposed claim review, and actual returned token usage |
 | Outreach | Server-enforced approval and local dry run; no email/LinkedIn provider connected |
@@ -79,7 +79,8 @@ The GitHub workflow runs checks and Snyk source/dependency scans. Configure a pr
 - `src/Billing.jsx`, `server/billing.js`: credit balances, pack/custom reloads, receipts, usage history, limits and retry-safe reload IDs.
 - `server/catalog.js`, `server/evidence.js`: cited research collection, source checks, transparent scoring, DNS MX.
 - `src/WebsiteIntake.jsx`, `server/website-intake.js`, `server/public-source.js`: public website retrieval, quoted-source admission, persistent candidate collection, and stale-evidence review.
-- `server/review-policy.js`: shared account-context invalidation for editable unsent drafts.
+- `src/ContactResearch.jsx`, `src/contact-evidence.js`, `server/hunter.js`, `server/contact-enrichment.js`: vendor candidates, dated verification, explicit contact selection, restrictions, and retry-safe metering.
+- `server/review-policy.js`: shared account-context invalidation for editable unsent drafts and restricted-recipient gating.
 - `server/intake.js`, `server/model.js`: bounded local extraction and credential-gated structured model output.
 - `tests/workflow.test.js`, `tests/assistant.test.js`, `tests/billing.test.js`: workflow, native database, assistant-review, and real SDK contract tests with intercepted HTTP fixtures.
 - `docs/system-design.md`, `docs/rubric-status.md`, `docs/demo-script.md`, `docs/demo-narration.md`: submission preparation and remaining gaps.
@@ -133,4 +134,23 @@ Review the retained text beside the account form. Use a company name present in 
 
 Accepted candidates persist and take part in subsequent source refreshes. Missing quotes, failed retrieval, or a removed selected email make evidence review required, deselect the account, block qualification/approval, and advance editable unsent draft versions. A successful fetch alone cannot clear that review requirement; fetch fresh pages and complete a new owner review. Sent receipts and historical stages stay intact. Admission is durable before graph projection; a pending graph refresh can be repaired without duplicating or charging for admission.
 
-Sources expire for admission after 24 hours. A changed profile requires fresh research; refresh the workspace after a revision conflict. Dismissal removes a pending intake from the queue but does not refund completed source work. Autonomous search and vendor contact verification remain unconnected. Protocol, DNS-pinning, state, and verification details are in [Website intake](docs/website-intake.md).
+Sources expire for admission after 24 hours. A changed profile requires fresh research; refresh the workspace after a revision conflict. Dismissal removes a pending intake from the queue but does not refund completed source work. Autonomous search remains unconnected; optional Hunter verification is implemented separately and requires a project key for live use. Protocol, DNS-pinning, state, and verification details are in [Website intake](docs/website-intake.md).
+
+
+## Optional project Hunter contact research
+
+Set `PROJECT_HUNTER_ENABLED=true` and `PROJECT_HUNTER_API_KEY` to an explicitly designated project key in the local `.env`, then restart `npm start`. `HUNTER_API_KEY`, global secret files, dummy values, and Hunter’s public test key do not enable the live adapter. The destination is fixed to Hunter’s official HTTPS API. API keys remain on the server and are never accepted through the browser.
+
+Open **Accounts → account preview → Contacts**. Confirm external processing, search the account domain, inspect a candidate’s source links and proposed role, and request email verification. Search and verification each reserve five **local demo credits**, separate from any Hunter charge. HTTP 202 remains pending until explicitly checked; checking the pending result uses no extra local credits. Closing a pending check refunds its local reservation without claiming to cancel Hunter processing or charges. Interrupted work fails on restart without replay.
+
+A **Hunter valid** label requires the matching address, successful MX/SMTP and format checks, no accept-all/block/disposable/webmail flag, and a real provider verification date within 30 days. Unknown or accept-all results need separate uncertainty acknowledgement. Invalid, disposable, webmail, restricted, off-domain, masked, source-free, and incomplete records cannot silently become valid contacts. Persona keyword overlap is a review hint; buying authority and LinkedIn ownership remain unverified. Headquarters/firmographic enrichment is not implemented.
+
+Using a contact is a separate human decision. It updates only this account’s editable unsent recipients, advances their versions, and clears approvals. Historical sent receipts stay unchanged. The graph and manually reported respondents retain vendor-role provenance. Hunter processing restrictions block new address processing and survive campaign reset; this is not a complete opt-out/suppression system.
+
+Verification: the full test suite covers intercepted provider contracts and workflow policy. A manual check also passed against Hunter’s official fixed-data public test API:
+
+```sh
+node scripts/check-hunter-contract.js
+```
+
+This command uses Hunter’s documented public `test-api-key`, applies **zero contacts**, and does not establish live contact verification. No live project Hunter key was used for the recorded validation. See [Contact enrichment](docs/contact-enrichment.md) and [Hunter’s API reference](https://hunter.io/api-documentation).

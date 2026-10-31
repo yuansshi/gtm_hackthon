@@ -28,7 +28,7 @@ export function createOutcomeReporter({ store, graph, competitors, snapshot }) {
       catch { invalid('Use a valid HTTPS reference without embedded credentials.'); }
     }
     if (input.draftId && (typeof input.draftId !== 'string' || input.draftId.length > 100)) invalid('Choose a recorded outbound message.');
-    if (input.respondent && (typeof input.respondent.name !== 'string' || typeof input.respondent.source !== 'string' || input.respondent.name.length > 200 || input.respondent.source.length > 1000)) invalid('Choose a published respondent from this account.');
+    if (input.respondent && (typeof input.respondent.name !== 'string' || typeof input.respondent.source !== 'string' || input.respondent.name.length > 200 || input.respondent.source.length > 1000)) invalid('Choose a source-backed person from this account.');
     const payload = { leadId, kind: input.kind, stage: input.stage, occurredAt: input.occurredAt, note: input.note.trim(), evidenceUrl, draftId: input.draftId || null, respondent: input.respondent ? { name: input.respondent.name, source: input.respondent.source } : null, updateStage: input.updateStage };
     const requestHash = digest(payload);
     const initial = store.read(id);
@@ -51,8 +51,8 @@ export function createOutcomeReporter({ store, graph, competitors, snapshot }) {
         let respondent = null;
         if (payload.respondent) {
           const person = (account.people || []).find(person => person.name === payload.respondent.name && person.source === payload.respondent.source);
-          if (!person) throw new AppError(409, 'The selected respondent is not in this account’s published people. Reload the account.', 'invalid_outcome_respondent');
-          respondent = { name: person.name, role: person.role || '', source: person.source };
+          if (!person) throw new AppError(409, 'The selected respondent is not in this account’s source-backed people. Reload the account.', 'invalid_outcome_respondent');
+          respondent = { name: person.name, role: person.role || '', source: person.source, provenance: person.provenance || 'published_source' };
         }
         const latestTime = (account.events || []).reduce((latest, event) => Number.isFinite(Date.parse(event.at)) ? Math.max(latest, Date.parse(event.at)) : latest, -Infinity);
         if (input.updateStage && time < latestTime) throw new AppError(409, 'A newer stage event is already recorded. Uncheck the stage update to add this as history.', 'outcome_before_latest');

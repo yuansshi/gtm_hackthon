@@ -73,11 +73,11 @@ export default function IndustryApp() {
   };
   useEffect(() => { loadServer(state.businessId); }, [state.businessId]);
   useEffect(() => {
-    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running'))) return;
+    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running'))) return;
     const id = state.businessId; const timer = setInterval(async () => {
       try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(next); } catch (e) { setConnectionError(e.message); }
     }, 1500); return () => clearInterval(timer);
-  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns]);
+  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns]);
   const perform = async (task, onError) => {
     const id = state.businessId; setBusy(true);
     try { return await task(id); } catch (e) { setToast(e.message); onError?.(e); return null; } finally { setBusy(false); }
@@ -159,6 +159,6 @@ export default function IndustryApp() {
     {toast && <div className="toast" role="status"><CircleCheck size={18} />{toast}</div>}
     {activityOpen && <Dialog title={`${business.name} activity`} drawer close={() => setActivityOpen(false)}><div className="activity-list">{state.activity.map(item => <div className="activity-item" key={item.id}><span className="activity-point"><Check size={13} /></span><div><strong>{item.title}</strong><p>{item.detail}</p><span>{item.actor} · {new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div></div>)}</div></Dialog>}
     {integrationOpen && <Dialog title="Service connections" drawer close={() => setIntegrationOpen(false)}><Integrations state={state} go={next => { setIntegrationOpen(false); go(next); }} /></Dialog>}
-    {resetOpen && <Dialog title={`Reset ${business.name}?`} close={() => setResetOpen(false)}><p>This resets {business.name}’s profile, research, drafts, activity, and pipeline. Credit balances and billing receipts are retained.</p><div className="modal-actions"><button className="button secondary" onClick={() => setResetOpen(false)}>Keep working</button><button disabled={busy || !connected || dirty} className="button primary" onClick={async () => { const result = await act('/reset'); if (result) { setResetOpen(false); go('product'); setToast(`${business.name} reset to its website-based draft.`); } }}>Reset this business</button></div></Dialog>}
+    {resetOpen && <Dialog title={`Reset ${business.name}?`} close={() => setResetOpen(false)}><p>This resets {business.name}’s profile, research, drafts, activity, and pipeline. Credit balances, billing receipts, and provider processing restrictions are retained.</p><div className="modal-actions"><button className="button secondary" onClick={() => setResetOpen(false)}>Keep working</button><button disabled={busy || !connected || dirty} className="button primary" onClick={async () => { const result = await act('/reset'); if (result) { setResetOpen(false); go('product'); setToast(`${business.name} reset to its website-based draft.`); } }}>Reset this business</button></div></Dialog>}
   </div>;
 }

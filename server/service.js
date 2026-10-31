@@ -10,7 +10,9 @@ import { analyzePipeline } from '../src/pipeline-metrics.js';
 import { createOutcomeReporter, markOutcomeProjection } from './outcomes.js';
 import { createWebsiteIntake, reviewWebsiteCandidate, markWebsiteProjection } from './website-intake.js';
 import { readPublicSource } from './public-source.js';
-import { invalidateAccountDrafts } from './review-policy.js';
+import { invalidateAccountDrafts, suppressedContact } from './review-policy.js';
+import { createHunterProvider } from './hunter.js';
+import { createContactEnrichment, mergeAccountPeople, markContactProjection } from './contact-enrichment.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
@@ -53,9 +55,10 @@ export function metrics(state, { asOf } = {}) {
     caveat: 'Stage transitions are attributed to their recorded actor. Simulated outreach is separately identified and is not a delivered message. Conversion rates use the same recorded-contact cohort and require outcomes after contact. A/B comparisons require explicit reply-to-draft links and are descriptive, not causal.' };
 }
 
-export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource }) {
-  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource, hunter = createHunterProvider() }) {
+  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
   const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
+  const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible });
   const recordOutcome = createOutcomeReporter({ store, graph, competitors, snapshot });
   const updateProfile = (s, incoming) => {
     const before = profileDigest(s);
@@ -179,7 +182,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
             if (existing) {
               const newlyStale = lead.customEvidence && lead.evidenceNeedsReview && !existing.evidenceNeedsReview;
               const preserved = { selected: lead.evidenceNeedsReview ? false : existing.selected, stage: existing.stage, events: existing.events, contact: existing.contact };
-              Object.assign(existing, lead, preserved, { excludedReason: exclusionReason(lead, s) });
+              Object.assign(existing, lead, preserved, { people: mergeAccountPeople(lead.people, existing.vendorPeople), excludedReason: exclusionReason(lead, s) });
               if (newlyStale) invalidateAccountDrafts(s, existing.id, { reason: 'account_source_changed', intakeId: lead.sourceIntakeId });
             } else s.leads.push({ ...lead, excludedReason: exclusionReason(lead, s) });
             if (lead.customEvidence && lead.evidenceNeedsReview) { const candidate = s.customCandidates?.find(item => item.id === lead.id); if (candidate) candidate.evidenceNeedsReview = true; }
@@ -204,15 +207,17 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const initial = store.read(id); const lead = findLead(initial, leadId);
     requireEligible(lead, initial);
     if (!initial.approved) throw new AppError(409, 'Customer profile approval is required.', 'profile_approval_required');
+    const email = lead.contact?.email || lead.publicEmail;
+    if (suppressedContact(initial, email)) throw new AppError(409, 'Processing of this address is restricted.', 'contact_suppressed');
     const reservation = store.reserve(id, 'enrichment', costs.enrichment, leadId);
     try {
-      const result = lead.publicEmail ? await mx(lead.publicEmail) : { status: 'not_available', records: [] };
+      const result = email ? await mx(email) : { status: 'not_available', records: [] };
       store.mutate(id, s => {
         const current = findLead(s, leadId);
         requireEligible(current, s);
-        if (!s.approved || profileDigest(s) !== profileDigest(initial) || current.publicEmail !== lead.publicEmail || current.sourceIntakeId !== lead.sourceIntakeId) throw new AppError(409, 'Account or profile evidence changed during the contact check. Check it again.', 'stale_account_context');
-        current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: 'unverified', verificationProvider: 'Public source + DNS MX', enrichmentNote: 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
-        addActivity(s, 'Contact research checked', `${lead.name}: ${lead.publicEmail ? 'published company address; MX ' + result.status : 'no public email established'}. Mailbox remains unverified.`, 'Enrichment agent');
+        if (!s.approved || profileDigest(s) !== profileDigest(initial) || (current.contact?.email || current.publicEmail) !== email || current.sourceIntakeId !== lead.sourceIntakeId) throw new AppError(409, 'Account or profile evidence changed during the contact check. Check it again.', 'stale_account_context');
+        current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: current.contact.mailboxStatus || 'unverified', mxVerificationProvider: 'DNS MX', verificationProvider: current.contact.verificationProvider || 'Public source + DNS MX', enrichmentNote: current.contact.provenance === 'hunter_reviewed' ? 'This updates DNS routing only. Hunter checks retain their original provider date; routing does not establish inbox delivery or buying authority.' : 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
+        addActivity(s, 'Contact research checked', `${lead.name}: ${email ? 'selected company address; MX ' + result.status : 'no public email established'}. This DNS check does not establish mailbox deliverability or buyer authority.`, 'Enrichment agent');
       });
       store.settle(id, reservation, true); return snapshot(id);
     } catch (error) { store.settle(id, reservation, false); throw error; }
@@ -234,7 +239,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
       subject: `${sequenceStep ? 'Follow-up: ' : ''}${product} — supplier qualification`, body,
       profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(),
-      generation: 'Source-grounded template; no model used', sources: [lead.source, s.company.website], actor: 'Drafting agent' };
+      generation: 'Source-grounded template; no model used', sources: [...new Set([lead.source, s.company.website, ...(lead.contact.sources || []).map(source => source.url)])], actor: 'Drafting agent' };
     s.drafts.unshift(d); addActivity(s, 'Outreach draft prepared', `${lead.name}; ${channel}; variant ${variant}; step ${sequenceStep + 1}. Human review required.`, 'Drafting agent'); return d.id;
   }).result;
 
@@ -280,6 +285,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!s.approved || d.profileHash !== profileDigest(s)) throw new AppError(409, 'Draft context changed. Generate a draft from the approved profile.', 'stale_profile');
     if (d.status !== 'draft' && d.status !== 'rejected') throw new AppError(409, 'Only an editable draft can be approved.', 'draft_locked');
     requireEligible(findLead(s, d.leadId), s);
+    if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
     addActivity(s, 'Exact message approved', `Recipient, subject, content, channel, and version ${d.version} recorded for ${findLead(s, d.leadId).name}.`, 'You', { draftId });
@@ -297,6 +303,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       if (s.wallet.credits < costs.outreach) throw new AppError(402, 'Insufficient credits. No message was dispatched.', 'insufficient_credits');
       const lead = findLead(s, d.leadId);
       requireEligible(lead, s);
+      if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
       s.wallet.credits -= costs.outreach; s.wallet.ledger.unshift({ id: randomUUID(), kind: 'outreach', leadId: lead.id, credits: costs.outreach, status: 'consumed', externalStatus: 'not_connected', mode: 'dry_run', at: now() });
       d.status = 'simulated'; d.sentAt = now(); d.deliveryMode = 'dry_run'; d.deliveryId = randomUUID();
       if (lead.stage === 'Matched') lead.stage = 'Contacted';
@@ -314,8 +321,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
   }).state;
   const graphView = async id => {
     const reservation = store.reserve(id, 'graph_query', costs.graph_query);
-    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
+    try { const state = store.read(id); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); store.settle(id, reservation, true); return { ...data, paths }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, assistantStatus: () => model.status() };
+  return { snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
 }

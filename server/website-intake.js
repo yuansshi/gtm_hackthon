@@ -5,6 +5,7 @@ import { costs } from './catalog.js';
 import { scoreAccount } from './evidence.js';
 import { publicSourceUrl, readPublicSource, sourceSite } from './public-source.js';
 import { invalidateAccountDrafts } from './review-policy.js';
+import { mergeAccountPeople } from './contact-enrichment.js';
 
 const normalized = value => String(value || '').replace(/\s+/g, ' ').trim();
 const containsQuote = (page, text) => normalized(page.text).toLowerCase().includes(normalized(text).toLowerCase());
@@ -101,7 +102,7 @@ export function createWebsiteIntake({ store, graph, competitors, snapshot, profi
       store.mutate(id, state => {
         const current = findIntake(state, intakeId);
         if (state.revision !== input.revision || !state.approved || profileDigest(state) !== intake.profileHash || current.status !== 'ready') throw new AppError(409, 'The workspace changed. Refresh and review the current profile and sources.', 'revision_conflict');
-        if (existing) { const currentLead = state.leads.find(item => item.id === existing.id); Object.assign(currentLead, lead, { stage: currentLead.stage, selected: false, events: currentLead.events, contact: currentLead.contact.email === publicEmail ? currentLead.contact : lead.contact }); invalidateAccountDrafts(state, lead.id, { reason: 'account_source_changed', intakeId }); }
+        if (existing) { const currentLead = state.leads.find(item => item.id === existing.id); Object.assign(currentLead, lead, { stage: currentLead.stage, selected: false, events: currentLead.events, people: mergeAccountPeople(lead.people, currentLead.vendorPeople), contact: currentLead.contact.email === publicEmail ? currentLead.contact : lead.contact }); invalidateAccountDrafts(state, lead.id, { reason: 'account_source_changed', intakeId }); }
         else state.leads.push(lead);
         state.customCandidates ||= []; state.customCandidates = [...state.customCandidates.filter(item => item.domain !== candidate.domain), candidate];
         current.status = 'accepted'; current.leadId = lead.id; current.reviewHash = reviewHash; current.review = { ...values, quotes, publicEmail }; current.reviewedAt = now(); current.graphStatus = 'pending';
