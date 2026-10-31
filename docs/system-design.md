@@ -16,6 +16,9 @@ flowchart LR
   Search --> Sources[Bounded public source retrieval]
   Sources --> Review[Human exact-quote account admission]
   Review --> Research
+  Research --> Monitor[Opt-in periodic company-source checks]
+  Monitor --> Events[Human dated-event review]
+  Events --> Graph
   Consent --> Hunter[Hunter search + dated email checks]
   Hunter --> Contact[Human contact selection]
   Contact --> Policy
@@ -127,3 +130,12 @@ A contact review validates candidate membership, verifier linkage, context, age,
 The search request carries a UUID, current revision, one or two approved product families, exact displayed queries, and processing acknowledgement. The server rebuilds the plan before reserving two local credits or contacting Tavily. It transmits no supplier/private profile fields or exclusion list. Fixed basic-search requests use bounded JSON, manual redirect rejection, redacted errors, and no automatic retries.
 
 Safe search URLs are grouped by domain. Local exclusions, known accounts, queued domains, and directories are removed before up to three domains/two pages each enter the existing DNS-pinned source reader. Successful pages become ready website intakes atomically after the approved-profile hash is rechecked. Search history distinguishes failed sources, local exclusions, duplicates, and ready/accepted proposals. Profile changes discard staged results and refund local credits. Restart recovery does not replay provider requests. Shared run cost stays business-scoped; actual returned provider usage is separate. See [Prospect search](prospect-search.md).
+
+
+## Dated signals and periodic ingestion
+
+Each account can retain one or two same-site company news/job URLs, explicit daily/weekly authorization, its approved-profile fingerprint, next due time, bounded source text, 50 evidence records and 100 check receipts. A server timer checks due monitors each minute, with one account per business per tick and no catch-up replay. Manual and scheduled checks share the same two-credit reservation, revision/profile/source/configuration guards and retry-safe UUID. Disabled or stopped monitors do no work; insufficient credit or changed schedule context pauses them. Restart refunds interrupted reservations and requires explicit resumption.
+
+Deterministic keyword/date extraction creates proposals, with exact event/date passages, content hashes and retrieval timestamps. No automatic intent points or stage progress results. Human acceptance requires a successful source less than 24 hours old, quote presence and a valid non-future source date. Accepted positive context is usable for 180 event days and seven source-check days. Failed retrieval or removed quotes marks prior evidence for review and invalidates editable unsent versions. Accepted negative evidence holds qualification even if its source becomes unavailable; only explicit withdrawal removes the effect.
+
+Reviewed events project to native Signal nodes and directional signal_for edges. Native multi-hop queries return fresh Signal → Company → Product paths, with buying-cycle interpretation explicitly unconfirmed. Decisions persist before projection, and retry/query repairs graph failures. Template/model context includes eligible public event quotes and dates, without sending local review notes to a model. Linked evidence is checked at approval and dry run; prepared templates can be regenerated when their signal context changes. HITL acknowledgement resets when its version/context changes. Details and limits: [Market signals](market-signals.md).

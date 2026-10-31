@@ -1,5 +1,6 @@
 import kuzu from 'kuzu';
 import path from 'node:path';
+import { signalFresh, signalHold } from '../src/market-signals.js';
 
 const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
 const relationships = {
@@ -40,9 +41,14 @@ export async function createGraph(directory) {
         for (const lead of state.leads) {
           const companyId = prefix + 'company:' + lead.id;
           await node('Company', companyId, lead.name, businessId, { leadId: lead.id, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null });
-          if (!lead.excludedReason) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
+          if (!lead.excludedReason && !signalHold(lead)) await edge('matched_to', companyId, prefix + 'product', businessId, lead.source);
           await node('Signal', prefix + 'signal:' + lead.id, lead.signal.title, businessId, lead.signal);
           await edge('signal_for', prefix + 'signal:' + lead.id, companyId, businessId, lead.signal.source);
+          for(const signal of (lead.marketSignals||[]).filter(signal=>signal.acceptedAt&&['accepted','needs_review'].includes(signal.status))){
+            const signalId=prefix+'market-signal:'+signal.id;
+            await node('Signal',signalId,signal.title,businessId,{...signal,provenance:'owner_reviewed_market_signal',freshContext:signalFresh(signal),purchaseIntentConfirmed:false,description:`${signal.eventDate}: ${signal.quote}. ${signal.status==='needs_review'?'Source evidence needs fresh review.':'Owner-reviewed company publication; purchasing intent remains unconfirmed.'}`});
+            await edge('signal_for',signalId,companyId,businessId,signal.source);
+          }
           for (const [index, p] of lead.people.entries()) {
             const personId = prefix + 'person:' + lead.id + ':' + index;
             await node('Person', personId, p.name, businessId, p);
@@ -95,5 +101,9 @@ export async function createGraph(directory) {
     const rows = await query('MATCH(p:Person)-[:works_at]->(c:Company)-[:matched_to]->(product:Product) WHERE p.businessId=$id AND c.businessId=$id AND product.businessId=$id RETURN p.name AS person,c.name AS company,product.name AS product,p.data AS evidence', { id });
     return rows.map(r => ({ ...r, evidence: JSON.parse(r.evidence), relation: 'Person → works_at → Company → matched_to → Product' }));
   });
-  return { sync, snapshot, paths, close: async () => { await queue; await connection.close(); await db.close(); } };
+  const marketPaths = id => serial(async()=>{
+    const rows=await query('MATCH(s:Signal)-[:signal_for]->(c:Company)-[:matched_to]->(p:Product) WHERE s.businessId=$id AND c.businessId=$id AND p.businessId=$id RETURN s.name AS signal,s.data AS evidence,c.name AS company,p.name AS product',{id});
+    return rows.flatMap(row=>{const evidence=JSON.parse(row.evidence);return evidence.provenance==='owner_reviewed_market_signal'&&signalFresh(evidence)?[{...row,evidence,relation:'Signal → signal_for → Company → matched_to → Product',interpretation:'Current public-event context; buyer evaluation cycle and purchase intent unconfirmed.'}]:[];});
+  });
+  return { sync, snapshot, paths, marketPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
 }
