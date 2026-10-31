@@ -5,6 +5,8 @@ import './styles.css';
 import './industry.css';
 import './workflow.css';
 import './billing.css';
+import './hitl.css';
+import './portal.css';
 import IndustryApp from './IndustryApp';
 
 createRoot(document.getElementById('root')).render(<IndustryApp />);

@@ -1,8 +1,8 @@
 export const modules = [
   { id: 'product', number: '01', title: 'Product & ICP', short: 'Product & ICP', icon: 'target', color: 'blue', description: 'Turn product context into a clear picture of your ideal buyer.', input: 'Product, pricing & customer context', output: 'Approved customer profile' },
-  { id: 'discovery', number: '02', title: 'Customer & competitor discovery', short: 'Discovery', icon: 'search', color: 'teal', description: 'Find the right accounts, buyers, and competitive opportunities.', input: 'Approved customer profile', output: 'Shortlisted accounts & buyers' },
+  { id: 'discovery', number: '02', title: 'Customer & competitor discovery', short: 'Accounts', icon: 'search', color: 'teal', description: 'Find the right accounts, buyers, and competitive opportunities.', input: 'Approved customer profile', output: 'Shortlisted accounts & buyers' },
   { id: 'graph', number: '03', title: 'Knowledge graph', short: 'Knowledge graph', icon: 'network', color: 'violet', description: 'Connect people, companies, and the signals that matter.', input: 'Accounts, people & public signals', output: 'Relationship & buying context' },
-  { id: 'outreach', number: '04', title: 'Enrichment & outreach', short: 'Outreach', icon: 'mail', color: 'orange', description: 'Prepare relevant messages with a human at the final checkpoint.', input: 'Buyer context & contact details', output: 'Human-approved outreach' },
+  { id: 'outreach', number: '04', title: 'HITL review & outreach', short: 'HITL review', icon: 'mail', color: 'orange', description: 'Review and approve the exact message before outreach can proceed.', input: 'Buyer context & contact details', output: 'Human-approved outreach' },
   { id: 'pipeline', number: '05', title: 'Lead management & dashboard', short: 'Pipeline', icon: 'kanban', color: 'green', description: 'Follow every lead and use the results to improve your next move.', input: 'Outreach & lead activity', output: 'Pipeline progress & feedback' },
 ];
 

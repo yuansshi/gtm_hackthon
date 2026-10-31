@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, BookOpen, Check, ChevronLeft, Download, ExternalLink, FileCheck2, Layers3, Plus, Save, ShieldCheck, Target } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronDown, Download, ExternalLink, FileCheck2, Layers3, Plus, Save, ShieldCheck, Target } from 'lucide-react';
 import { missingResearchFields } from './businesses';
 import GuidedIntake, { ConfidencePanel } from './GuidedIntake';
 
@@ -27,9 +27,9 @@ export default function ModuleOne({ business, state, change: commitChange, appro
   const productNames = business.families.filter(([id]) => state.productFamilies.includes(id)).map(([, name]) => name);
 
   return <>
-    <div className="page-heading"><div><div className="eyebrow">Module 01 / {business.name}</div><h1>Define what you can supply.</h1><p>Turn your products, capabilities, and customer criteria into an approved research brief.</p></div><div className="heading-actions"><button className="button secondary" onClick={saveDraft}><Save size={15} />Save draft</button><button className="button secondary" onClick={exportBrief}><Download size={15} />Export brief</button></div></div>
+    <div className="page-heading"><div><div className="eyebrow">Module 01 / {business.name}</div><h1>Product & ICP</h1><p>Turn your products, capabilities, and customer criteria into an approved research brief.</p></div><div className="heading-actions"><button className="button secondary" onClick={saveDraft}><Save size={15} />Save draft</button><button className="button secondary" onClick={exportBrief}><Download size={15} />Export brief</button></div></div>
     <div className="business-boundary"><span className={`business-stamp ${business.color}`}>{business.initials}</span><div><strong>{business.name}</strong><span>Only this business’s profile, approvals, and campaign data are in this workspace.</span></div><span className={`pill ${state.approved ? 'green' : 'amber'}`}><i />{state.approved ? 'Research profile approved' : 'Draft · review required'}</span></div>
-    <GuidedIntake state={state} act={act} busy={busy} />
+    <details className="intake-disclosure" open={!state.approved}><summary><span><strong>Guided product intake</strong><small>{state.approved ? 'Profile approved. Expand to refine product context.' : 'Build your profile from a plain-language product description.'}</small></span><ChevronDown size={17} /></summary><GuidedIntake state={state} act={act} busy={busy} /></details>
     <div className="module-one-layout">
       <section className="panel module-one-form">
         <div className="profile-steps" role="tablist" aria-label="Module 1 sections">{tabs.map(({ title, icon: Icon }, i) => <button type="button" key={title} role="tab" aria-selected={tab === i} aria-controls={`profile-panel-${i}`} id={`profile-tab-${i}`} className={tab === i ? 'selected' : ''} onClick={() => setTab(i)}><span>{i + 1}</span><Icon size={15} />{title}</button>)}</div>
@@ -83,7 +83,7 @@ export default function ModuleOne({ business, state, change: commitChange, appro
         <section className={`readiness-panel ${missing.length ? '' : 'ready'}`}><div><FileCheck2 size={18} /><h3>{missing.length ? `${missing.length} items before research approval` : 'Ready for your review'}</h3></div>{missing.length ? <ul>{missing.map(item => <li key={item}>{item}</li>)}</ul> : <p>Review the Ideal customers section and confirm before approving.</p>}</section>
         <ConfidencePanel state={state} />
         <div className="notice industrial-note"><ShieldCheck size={18} /><span><strong>Technical qualification stays separate.</strong> Discovery may identify a possible application. An engineer must confirm the part, drawing revision, material, and operating conditions before a quote or compatibility claim.</span></div>
-        {state.approved && <button className="button primary" onClick={() => go('discovery')}>Continue to Module 2<ArrowRight size={16} /></button>}
+        {state.approved && <button className="button primary" onClick={() => go('discovery')}>Open account research<ArrowRight size={16} /></button>}
       </aside>
     </div>
   </>;
