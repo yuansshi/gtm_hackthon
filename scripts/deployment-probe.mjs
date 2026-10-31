@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import {readFileSync,writeFileSync} from 'node:fs';
 
 assert.equal(process.env.GTM_DEPLOYMENT_SMOKE, '1', 'Use only through the isolated deployment checker.');
 const phase = process.env.GTM_SMOKE_PHASE;
@@ -17,6 +18,23 @@ const commercialPlan = {monetizationModel:'Synthetic manufacturing per order',pr
 const productDescription='Synthetic custom hydraulic cylinders, subject to application review';
 const pressureStatement='Synthetic 250 bar target, seal and duty-cycle review pending';
 const assertReviewedIntake = state => {for(const [key,value] of Object.entries(commercialPlan))assert.equal(state.commercial[key],value);assert.equal(state.icp.targetTitles,'Synthetic Engineering Director');assert.equal(state.icp.targetSeniority,'Director, Manager');assert.equal(state.company.description,productDescription);assert.deepEqual(state.capabilities.pressure,{value:pressureStatement,status:'unknown'});};
+// Compare the original records, not just counts that a fresh seed could satisfy.
+const recordedState = state => ({
+  businessId:state.businessId,
+  profile:Object.fromEntries(['company','productFamilies','capabilities','commercial','icp','expansionDecisions','expansionAdjustments','approved','approvedAt','approvedProfileHash'].map(key=>[key,state[key]])),
+  wallet:state.wallet,
+  leads:state.leads.map(({communicationStatus,...lead})=>lead),
+  drafts:state.drafts.map(({communicationStatus,livePreview,...draft})=>draft),
+  activity:state.activity,
+});
+const workspaceProof=path.join(directory,'.deployment-workspace-proof.json');
+const checkRecordedState=states=>assert.deepEqual(JSON.parse(JSON.stringify(states.map(recordedState))),JSON.parse(readFileSync(workspaceProof,'utf8')),'Restored records must retain original IDs, timestamps, copy, approvals, receipts, ledger, ownership and history.');
+const graphProof=path.join(directory,'.deployment-graph-proof.json');
+const graphRecords=(snapshot,paths)=>({
+  nodes:snapshot.nodes.toSorted((a,b)=>a.id.localeCompare(b.id)),
+  edges:snapshot.edges.toSorted((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  paths:paths.toSorted((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),
+});
 
 if (phase === 'seed') {
   const {createStore} = await moduleAt('store.js');
@@ -39,6 +57,7 @@ if (phase === 'seed') {
   const store = createStore(directory);
   try {
     const state = store.read('allco');
+    checkRecordedState([state,store.read('huasheng')]);
     assert.equal(state.signalFixture,true);assert.equal(state.wallet.credits,123);
     assertReviewedIntake(state);
     assertExpansionPlan(state);
@@ -52,10 +71,13 @@ if (phase === 'seed') {
       assert.ok(snapshot.edges.some(e=>e.type==='matched_to'));
       assert.ok(snapshot.edges.some(e=>e.type==='contacted_via'));
       assert.ok(snapshot.edges.some(e=>e.type==='replied_to'));
-      assert.ok((await graph.paths('allco')).length>0);
+      const paths=await graph.paths('allco');assert.ok(paths.length>0);
       assert.ok(!JSON.stringify(snapshot).includes('Synthetic Sales Owner'));
       assert.ok(!JSON.stringify(snapshot).includes(commercialPlan.targetContractValue));
       assert.equal((await graph.snapshot('huasheng')).nodes.length,0);
+      const actual=graphRecords(snapshot,paths);
+      if(process.env.GTM_SMOKE_CAPTURE==='1')writeFileSync(graphProof,JSON.stringify(actual),{flag:'wx',mode:0o600});
+      else assert.deepEqual(actual,JSON.parse(readFileSync(graphProof,'utf8')),'Copied Kuzu must retain the original native nodes, directional edges and paths before application reconstruction.');
     } finally {await graph.close();}
   } finally {store.close();}
   console.log('SQLite balances/receipts and native Kuzu nodes/paths persisted across shutdown without rebuilding the graph.');
@@ -121,5 +143,7 @@ if (phase === 'seed') {
     console.log('Fresh server sessions read persisted campaign state; replay does not create a second receipt/debit.');
   }
   const other=await json('/api/businesses/huasheng');assert.equal(other.leads.length,0);assert.equal(other.drafts.length,0);assert.equal(other.wallet.credits,100);
+  if(phase==='exercise')writeFileSync(workspaceProof,JSON.stringify([state,other].map(recordedState)),{flag:'wx',mode:0o600});
+  else checkRecordedState([state,other]);
   console.log('Business isolation and disabled-provider status verified.');
 }

@@ -5,6 +5,7 @@ Creates only disposable data. No project credentials, live providers or external
 messages are used. --native validates the probe without claiming a Docker run.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,58 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = (ROOT / "scripts/deployment-probe.mjs").read_text()
 OFF = {name: "false" for name in ["PROJECT_AI_ENABLED", "PROJECT_HUNTER_ENABLED", "PROJECT_TAVILY_ENABLED", "PROJECT_FLEXPRICE_ENABLED", "PROJECT_SENDGRID_ENABLED", "PROJECT_BAND_ENABLED"]}
+
+
+def directory_manifest(directory):
+    """Fingerprint all regular files, hidden entries and empty directories."""
+    result = {}
+    for entry in sorted(Path(directory).rglob('*')):
+        if entry.is_symlink():
+            raise RuntimeError('Smoke backup refuses symlinks.')
+        key = str(entry.relative_to(directory))
+        if entry.is_dir():
+            result[key] = {"type": "directory", "mode": entry.stat().st_mode & 0o777}
+        elif entry.is_file():
+            digest = hashlib.sha256()
+            with entry.open('rb') as data:
+                for block in iter(lambda: data.read(1024 * 1024), b''):
+                    digest.update(block)
+            result[key] = {"type": "file", "mode": entry.stat().st_mode & 0o777, "bytes": entry.stat().st_size, "sha256": digest.hexdigest()}
+        else:
+            raise RuntimeError('Smoke backup requires regular files/directories.')
+    assert 'workspace.sqlite' in result and 'knowledge.kuzu' in result
+    return result
+
+
+def copy_offline_fixture(source, target):
+    """Caller has already stopped the isolated owner; never copies live app data."""
+    expected = directory_manifest(source)
+    shutil.copytree(source, target)
+    assert directory_manifest(target) == expected, 'Backup/restore content or permissions changed.'
+    assert directory_manifest(source) == expected, 'The stopped source must remain untouched.'
+    return expected
+
+
+# Passed on stdin to a disposable container; not shipped in the runtime image.
+COPY_VOLUME = r"""
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+function manifest(root){
+ const records=[];
+ function walk(relative=''){
+  for(const name of fs.readdirSync(path.join(root,relative)).sort()){
+   const key=path.join(relative,name),file=path.join(root,key),stat=fs.lstatSync(file);
+   assert.ok(!stat.isSymbolicLink(),'Backup fixture must not contain symlinks.');
+   if(stat.isDirectory()){records.push({path:key,type:'directory',mode:stat.mode&0o777});walk(key);}
+   else{assert.ok(stat.isFile());records.push({path:key,type:'file',mode:stat.mode&0o777,bytes:stat.size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')});}
+  }
+ }
+ walk();assert.ok(records.some(r=>r.path==='workspace.sqlite'));assert.ok(records.some(r=>r.path==='knowledge.kuzu'));return records;
+}
+assert.notEqual(process.getuid(),0);assert.deepEqual(fs.readdirSync('/data'),[],'Restore only into an empty separate volume.');
+const before=manifest('/source');fs.cpSync('/source','/data',{recursive:true,errorOnExist:true,force:false,preserveTimestamps:true});
+assert.deepEqual(manifest('/data'),before);assert.deepEqual(manifest('/source'),before);
+console.log('Offline separate-volume copy verified: '+before.length+' entries; complete file hashes and permissions match.');
+"""
 
 
 def run(args, *, env=None, source=None, allow_failure=False):
@@ -46,15 +99,15 @@ def native():
         denied = run([node, "server/index.js"], env=missing, allow_failure=True)
         assert denied.returncode != 0 and "PROJECT_ACCESS_TOKEN is required" in denied.stderr
 
-        def probe(phase):
-            result = run([node, "--input-type=module"], env={**env, "GTM_SMOKE_PHASE": phase}, source=PROBE)
+        def probe(phase, data_dir=None, capture=False):
+            result = run([node, "--input-type=module"], env={**env, "DATA_DIR": data_dir or env['DATA_DIR'], "GTM_SMOKE_PHASE": phase, "GTM_SMOKE_CAPTURE": '1' if capture else '0'}, source=PROBE)
             print(result.stdout, end="", flush=True)
 
-        def server_round(phase):
+        def server_round(phase, data_dir=None):
             with open(temporary + "/server.log", "w+") as logs:
-                process = subprocess.Popen([node, "server/index.js"], cwd=ROOT, env=env, stdout=logs, stderr=logs)
+                process = subprocess.Popen([node, "server/index.js"], cwd=ROOT, env={**env, "DATA_DIR": data_dir or env['DATA_DIR']}, stdout=logs, stderr=logs)
                 try:
-                    probe(phase)
+                    probe(phase, data_dir)
                 except Exception:
                     logs.seek(0)
                     print(logs.read()[-10000:])
@@ -72,9 +125,17 @@ def native():
 
         probe("seed")
         server_round("exercise")
-        probe("storage")
+        probe("storage", capture=True)
         server_round("verify")
-    print("Native process smoke passed. This is not Docker/Linux verification.", flush=True)
+        backup, restored = temporary + '/backup', temporary + '/restored'
+        expected = copy_offline_fixture(env['DATA_DIR'], backup)
+        copy_offline_fixture(backup, restored)
+        probe('storage', restored)
+        server_round('verify', restored)
+        assert directory_manifest(env['DATA_DIR']) == expected
+        assert directory_manifest(backup) == expected
+        print('Separate offline backup/restore retained full file hashes, native graph and exact campaign records; source and backup unchanged.', flush=True)
+    print("Native process and isolated backup restoration passed. This is not Docker/Linux verification.", flush=True)
 
 
 def container():
@@ -82,6 +143,7 @@ def container():
         raise RuntimeError("Docker is required; use --native only to check the local probe.")
     unique = "gtm-smoke-" + uuid.uuid4().hex[:12]
     image, volume = unique + ":test", unique + "-data"
+    backup_volume, restored_volume = unique + '-backup', unique + '-restored'
     env = {**os.environ, "PROJECT_ACCESS_TOKEN": secrets.token_hex(32)}
     run(["docker", "info"], env=env)
     print("Building the actual Linux runtime image...", flush=True)
@@ -94,20 +156,20 @@ def container():
         denied = run(["docker", "run", "--rm", "--network", "none", image], env=env, allow_failure=True)
         assert denied.returncode != 0 and "PROJECT_ACCESS_TOKEN is required" in denied.stderr
         run(["docker", "volume", "create", volume], env=env)
-        mount = ["--mount", f"type=volume,source={volume},target=/data"]
-
-        def probe(phase, running=False):
+        def probe(phase, running=False, data_volume=None, capture=False):
             if running:
                 args = ["docker", "exec", "--interactive", "--env", "GTM_DEPLOYMENT_SMOKE=1", "--env", f"GTM_SMOKE_PHASE={phase}", unique, "node", "--input-type=module"]
             else:
-                args = ["docker", "run", "--rm", "--interactive", "--network", "none", *mount, "--env", "GTM_DEPLOYMENT_SMOKE=1", "--env", f"GTM_SMOKE_PHASE={phase}", image, "node", "--input-type=module"]
+                selected_mount = ['--mount',f"type=volume,source={data_volume or volume},target=/data"]
+                args = ["docker", "run", "--rm", "--interactive", "--network", "none", *selected_mount, "--env", "GTM_DEPLOYMENT_SMOKE=1", "--env", f"GTM_SMOKE_PHASE={phase}", '--env',f"GTM_SMOKE_CAPTURE={'1' if capture else '0'}", image, "node", "--input-type=module"]
             result = run(args, env=env, source=PROBE)
             print(result.stdout, end="", flush=True)
 
-        def start():
+        def start(data_volume=None):
             # No published port or outbound network. Only docker exec can reach
             # this isolated CI container, using its own loopback HTTP server.
-            args = ["docker", "run", "--detach", "--name", unique, "--network", "none", *mount, "--env", "PROJECT_ACCESS_TOKEN", "--env", "PUBLIC_ORIGIN=http://127.0.0.1:3001"]
+            selected_mount = ['--mount',f"type=volume,source={data_volume or volume},target=/data"]
+            args = ["docker", "run", "--detach", "--name", unique, "--network", "none", *selected_mount, "--env", "PROJECT_ACCESS_TOKEN", "--env", "PUBLIC_ORIGIN=http://127.0.0.1:3001"]
             for key, value in OFF.items():
                 args.extend(["--env", f"{key}={value}"])
             args.append(image)
@@ -133,11 +195,33 @@ def container():
         assert state["ExitCode"] == 0 and not state["OOMKilled"]
         run(["docker", "rm", unique], env=env)
         started = False
-        probe("storage")
+        probe("storage", capture=True)
         start()
         started = True
         probe("verify", running=True)
-        print("Linux Docker startup, health, HTTP workflow, native persistence and container recreation passed.", flush=True)
+        run(["docker", "stop", "--time", "90", unique], env=env)
+        state = json.loads(run(["docker", "inspect", unique], env=env).stdout)[0]["State"]
+        assert state["ExitCode"] == 0 and not state["OOMKilled"]
+        run(["docker", "rm", unique], env=env)
+        started = False
+
+        def copy_volume(source, target):
+            run(['docker','volume','create',target],env=env)
+            result = run(['docker','run','--rm','--interactive','--network','none','--mount',f'type=volume,source={source},target=/source,readonly','--mount',f'type=volume,source={target},target=/data',image,'node'],env=env,source=COPY_VOLUME)
+            print(result.stdout,end='',flush=True)
+
+        copy_volume(volume, backup_volume)
+        copy_volume(backup_volume, restored_volume)
+        probe('storage', data_volume=restored_volume)
+        start(restored_volume)
+        started = True
+        probe('verify', running=True)
+        run(["docker", "stop", "--time", "90", unique], env=env)
+        state = json.loads(run(["docker", "inspect", unique], env=env).stdout)[0]["State"]
+        assert state["ExitCode"] == 0 and not state["OOMKilled"]
+        run(["docker", "rm", unique], env=env)
+        started = False
+        print("Linux Docker startup, health, HTTP workflow, native persistence, container recreation and separate-volume backup restoration passed.", flush=True)
     except Exception:
         if started:
             print(run(["docker", "logs", "--tail", "60", unique], env=env, allow_failure=True).stdout)
@@ -145,6 +229,8 @@ def container():
     finally:
         run(["docker", "rm", "--force", unique], env=env, allow_failure=True)
         run(["docker", "volume", "rm", volume], env=env, allow_failure=True)
+        run(["docker", "volume", "rm", backup_volume], env=env, allow_failure=True)
+        run(["docker", "volume", "rm", restored_volume], env=env, allow_failure=True)
         run(["docker", "image", "rm", image], env=env, allow_failure=True)
 
 
