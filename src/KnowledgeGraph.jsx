@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, Compass, ExternalLink, GitBranch, List, Network, 
 import { CompanyGraphEvidence } from './CompanyResearch.jsx';
 import { WarmIntroductionPaths } from './PeopleResearch.jsx';
 import { graphContextKey } from './graph-context.js';
+import { CompetitorGraphEvidence } from './CompetitorEvidence.jsx';
 import './knowledge-graph.css';
 
 const types = ['Person', 'Company', 'Product', 'Competitor', 'Signal'];
@@ -54,6 +55,7 @@ function NodeInspector({ node, graph, select, close, go }) {
     {description(node) && <p>{description(node)}</p>}
     {source(node.data.source, node.data.provenance === 'user_reported' ? 'User-provided reference (unverified)' : node.data.provenance === 'hunter_reviewed' ? 'Vendor-returned source · role unverified' : 'Primary source')}
     <CompanyGraphEvidence profile={node.data.companyProfile}/>
+    <CompetitorGraphEvidence review={node.data.competitiveReview}/>
     {accountId && <button className="kg-account-link" onClick={() => go('discovery', { accountId })}>Open account research<ArrowRight size={13}/></button>}
     <div className="kg-relationship-title"><h3>Relationships</h3><span>{linked.length}</span></div>
     <div className="kg-relationships">{linked.length ? linked.map((edge, index) => {
@@ -94,7 +96,7 @@ export default function KnowledgeGraph({ state, act, busy, go }) {
   return <>
     <div className="page-heading"><div><div className="eyebrow">Module 03</div><h1>Knowledge graph</h1><p>Explore the evidence connecting people, accounts, products, and market signals.</p></div><div className="heading-actions"><button disabled={busy} className="button primary" onClick={runQuery}><Network size={15}/>{graph ? 'Refresh graph' : 'Query graph'} · 1 credit</button></div></div>
     <div className="notice"><GitBranch size={18}/><span>Scoped to {state.company.name}. Application matches do not establish buying intent.</span></div>
-    {(state.signalFixture || state.companyFixture || state.peopleFixture) && <div className="notice">Test fixture only · synthetic research evidence</div>}
+    {(state.signalFixture || state.companyFixture || state.peopleFixture || state.competitorFixture) && <div className="notice">Test fixture only · synthetic research evidence</div>}
     {!graph ? <section className="panel workflow-empty"><Compass size={28}/><h2>Explore this business’s relationships</h2><p>Query the graph after discovery, then select a record to inspect its sources and connections.</p></section> : <>
       <section className="panel kg-explorer" aria-label="Graph explorer">
         <div className="kg-toolbar"><label className="kg-search"><Search size={15}/><span className="sr-only">Search graph records</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search records…"/>{query && <button className="icon-button" aria-label="Clear graph search" onClick={() => setQuery('')}><X size={13}/></button>}</label><label className="kg-type-filter"><span>Type</span><select value={type} onChange={event => setType(event.target.value)} aria-label="Graph record type"><option value="all">All types ({nodes.length})</option>{types.map(item => <option key={item} value={item}>{item} ({nodes.filter(node => node.type === item).length})</option>)}</select></label><div className="kg-view-switch" role="group" aria-label="Graph view"><button aria-pressed={view === 'map'} onClick={() => setView('map')}><Network size={14}/>Map</button><button aria-pressed={view === 'records'} onClick={() => setView('records')}><List size={14}/>Records</button></div></div>

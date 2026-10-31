@@ -53,15 +53,15 @@ export const researchCatalog = [
 
 export const competitors = {
   allco: [
-    { id: 'parker', name: 'Parker Hannifin', category: 'Direct', focus: 'Hydraulic cylinder products and application engineering', source: 'https://discover.parker.com/hydraulic-cylinder-specification', pricing: 'Public price not established; quotation needed', angle: 'Compare only documented specifications, support, lead times, and qualification requirements.' },
-    { id: 'rexroth', name: 'Bosch Rexroth', category: 'Direct', focus: 'Industrial and mobile hydraulic products', source: 'https://www.boschrexroth.com/', pricing: 'Public price not established; quotation needed', angle: 'Collect an approved capability comparison before making claims.' },
+    { id: 'parker', name: 'Parker Hannifin', category: 'Direct', focus: 'Hydraulic cylinder products and application engineering', source: 'https://discover.parker.com/hydraulic-cylinder-specification', pricing: 'Public pricing not established', angle: 'Compare only documented specifications, support, lead times, and qualification requirements.' },
+    { id: 'rexroth', name: 'Bosch Rexroth', category: 'Direct', focus: 'Industrial and mobile hydraulic products', source: 'https://www.boschrexroth.com/', pricing: 'Public pricing not established', angle: 'Collect an approved capability comparison before making claims.' },
     { id: 'repair', name: 'Repair or rebuild existing cylinders', category: 'Alternative', focus: 'An alternative buying approach, not a named supplier', source: null, pricing: 'Case-specific', angle: 'Ask whether the opportunity is a new design, replacement, or rebuild.' },
   ],
   huasheng: [
-    { id: 'metso', name: 'Metso', category: 'Direct / OEM ecosystem', focus: 'Crushing equipment and wear parts', source: 'https://www.metso.com/', pricing: 'Quotation needed', angle: 'Do not imply OEM approval or equivalent performance without evidence.' },
+    { id: 'metso', name: 'Metso', category: 'Direct / OEM ecosystem', focus: 'Crushing equipment and wear parts', source: 'https://www.metso.com/', pricing: 'Public pricing not established', angle: 'Do not imply OEM approval or equivalent performance without evidence.' },
     { id: 'existing', name: 'Existing approved foundry', category: 'Alternative', focus: 'An incumbent relationship; identify it during qualification', source: null, pricing: 'Unknown', angle: 'Understand qualification cost, tooling ownership, and the reason to change suppliers.' },
   ],
 };
 
 export const pipelineStages = ['Matched', 'Contacted', 'Replied', 'Meeting booked', 'RFQ received', 'Engineering review', 'Quote sent', 'Trial / qualification', 'Closed won', 'Closed lost'];
-export const costs = { discovery: 2, enrichment: 5, graph_query: 1, outreach: 1, inference: 2, market_signals: 2, people_research: 2 };
+export const costs = { discovery: 2, enrichment: 5, graph_query: 1, outreach: 1, inference: 2, market_signals: 2, people_research: 2, competitor_research: 2 };

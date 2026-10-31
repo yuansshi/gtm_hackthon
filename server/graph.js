@@ -3,6 +3,7 @@ import path from 'node:path';
 import { signalFresh, signalHold } from '../src/market-signals.js';
 import { companyHoldReasons } from '../src/company-evidence.js';
 import { projectedPeople, personDateFresh } from '../src/people-evidence.js';
+import { competitiveReferences } from '../src/competitor-evidence.js';
 
 const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
 const relationships = {
@@ -36,9 +37,11 @@ export async function createGraph(directory) {
       try {
         for (const label of labels) await query(`MATCH(n:${label}) WHERE n.businessId=$businessId DETACH DELETE n`, { businessId });
         await node('Product', prefix + 'product', state.businessId === 'allco' ? 'Custom hydraulic cylinders' : 'Wear-resistant castings', businessId, { businessName: state.company.name, families: state.productFamilies, description: state.company.description, source: state.company.website });
-        for (const c of competitors) {
-          await node('Competitor', prefix + 'competitor:' + c.id, c.name, businessId, c);
-          await edge('competes_with', prefix + 'product', prefix + 'competitor:' + c.id, businessId, c.source || 'Alternative approach; hypothesis');
+        for (const c of competitiveReferences(state, competitors)) {
+          const { review, current, ...reference } = c;
+          const competitiveReview = current ? { id: review.id, category: review.category, evidence: review.evidence, pricingMode: review.pricingMode, reviewedAt: review.reviewedAt, pages: review.pages, classification: 'Owner assessment; competitive advantage is not independently verified.' } : null;
+          await node('Competitor', prefix + 'competitor:' + c.id, current ? review.name : c.name, businessId, { ...reference, ...(current ? { source: review.evidence.identity.url, focus: review.evidence.positioning.quote, pricing: review.evidence.pricing?.quote || 'Pricing not established in reviewed pages' } : {}), competitiveReview, evidenceStatus: current ? 'Source passages reviewed' : 'Unreviewed reference / fresh review needed' });
+          if (!c.id.startsWith('custom:') || current) await edge('competes_with', prefix + 'product', prefix + 'competitor:' + c.id, businessId, current ? review.evidence.positioning.url : c.source || 'Alternative approach; hypothesis');
         }
         for (const lead of state.leads) await node('Company', prefix + 'company:' + lead.id, lead.name, businessId, { leadId: lead.id, domain: lead.domain, industry: lead.industry, location: lead.location, source: lead.source, evidenceStatus: lead.evidenceStatus, excludedReason: lead.excludedReason || null, companyProfile:lead.companyProfile?.status==='reviewed'?lead.companyProfile:null });
         for (const lead of state.leads) {

@@ -1,0 +1,45 @@
+.ce-content { border-top: 1px solid #e6e9ef; padding: 16px; color: #667085; font-size: 12px; line-height: 1.75; }
+.ce-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.ce-intro p { max-width: 75ch; margin: 0; }
+.ce-intro .ar-button { flex-shrink: 0; }
+.ce-content h3, .ce-content h4 { color: #344054; }
+.ce-content label { display: flex; flex-direction: column; gap: 5px; color: #344054; font-size: 12px; }
+.ce-content input:not([type=checkbox]), .ce-content select, .ce-content textarea { width: 100%; min-width: 0; padding: 8px 10px; background: #fff; border: 1px solid #d5dce6; border-radius: 5px; color: #344054; font: inherit; }
+.ce-content textarea { resize: vertical; line-height: 1.7; }
+.ce-content small { font-size: 11px; color: #667085; line-height: 1.6; }
+.ce-field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ce-source-form, .ce-review { display: grid; gap: 16px; margin-top: 18px; padding: 18px; background: #fafbfc; border: 1px solid #e6e9ef; border-radius: 6px; }
+.ce-source-form h3, .ce-review h3 { margin: 0; font-size: 14px; }
+.ce-source-form .ar-button, .ce-review .ar-button { justify-self: start; }
+.ce-source-form { scroll-margin-top: 24px; }
+.ce-content .ce-check { flex-direction: row; align-items: flex-start; gap: 8px; }
+.ce-check input { margin-top: 5px; accent-color: #315cba; flex-shrink: 0; }
+.ce-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ce-runs { margin-top: 22px; padding-bottom: 22px; border-bottom: 1px solid #e6e9ef; }
+.ce-runs > label { max-width: 600px; }
+.ce-source { margin-top: 12px; padding: 12px; background: #fafbfc; border: 1px solid #e6e9ef; border-radius: 5px; }
+.ce-content summary { color: #344054; cursor: pointer; font-size: 12px; }
+.ce-source pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; margin-top: 10px; border: 1px solid #e6e9ef; background: #fff; font: inherit; }
+.ce-content a, .ce-graph a { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; color: #315cba; text-decoration: none; overflow-wrap: anywhere; }
+.ce-source small { display: block; margin-top: 6px; }
+.ce-reference { padding: 18px 0; border-bottom: 1px solid #e6e9ef; }
+.ce-reference:last-child { border-bottom: 0; }
+.ce-reference header, .ce-reference header > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.ce-reference header { justify-content: space-between; }
+.ce-reference h3 { margin: 0; font-size: 14px; }
+.ce-reference p { margin: 8px 0; }
+.ce-reference > small, .ce-reference > a { display: block; }
+.ce-reference details { margin-top: 12px; }
+.ce-reference .ce-check { margin: 12px 0; }
+.ce-refresh { margin-top: 14px; }
+.ce-passages { display: grid; gap: 15px; margin-top: 12px; }
+.ce-passages h4 { margin: 0 0 6px; font-size: 12px; }
+.ce-passages blockquote { margin: 0 0 7px; padding: 10px 12px; background: #f8faff; border-left: 2px solid #b7c8e9; color: #475467; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; }
+.ce-interpretation { margin-top: 18px; padding: 12px; border: 1px solid #e6e9ef; }
+.ce-interpretation h4 { margin: 0; }
+.ce-content .ce-error { color: #a02d3b; }
+.ce-warning { padding: 10px 12px; background: #fff6e5; border: 1px solid #ead7b4; color: #84590d; }
+.ce-graph { border-top: 1px solid #e6e9ef; padding-top: 14px; margin-top: 15px; }
+.ce-graph h3 { font-size: 12px; margin: 0 0 8px; }
+.ce-graph summary { color: #315cba; cursor: pointer; font-size: 12px; }
+@media(max-width: 1050px) { .ce-intro { flex-wrap: wrap; gap: 12px; } .ce-field-pair { grid-template-columns: 1fr; } }

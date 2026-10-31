@@ -14,7 +14,7 @@ export const publicDraft = d => ({ ...d, approvedHash: d.approvedHash || null })
 
 export function initialRuntime(id) {
   return {
-    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], companyReviews: [], companyRestrictions: [], peopleResearch: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
+    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], companyReviews: [], companyRestrictions: [], competitorResearch: [], competitorReviews: [], competitorOperations: [], peopleResearch: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
     wallet: { credits: 100, initialCredits: 100, currency: 'demo credits', ledger: [] },
     version: 2, revision: 0, serverPersisted: true,
   };
@@ -32,6 +32,7 @@ export function recoverInterruptedWork(store) {
     store.mutate(id, state => {
       for (const job of state.jobs.filter(job => job.status === 'running')) { job.status = 'failed'; job.error = 'Server restarted; reserved credits refunded. Start a new research request.'; job.completedAt = now(); }
       for (const intake of state.sourceIntakes || []) if (intake.status === 'running') { intake.status = 'failed'; intake.error = 'Server restarted; reserved credits refunded. Start a new source request.'; intake.errorCode = 'interrupted_request'; intake.completedAt = now(); }
+      for (const run of state.competitorResearch || []) if (run.status === 'running') { run.status = 'failed'; run.error = 'Server restarted; reserved credits refunded. Competitor research is not replayed.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); }
       for (const run of state.peopleResearch || []) if (run.status === 'running') { run.status = 'failed'; run.error = 'Server restarted; reserved credits refunded. No people research is replayed.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); }
       for(const lead of state.leads)for(const run of lead.signalMonitor?.runs||[])if(run.status==='running'){run.status='failed';run.error='Server restarted; local credits refunded. This source check will not replay.';run.completedAt=now();lead.signalMonitor.enabled=false;lead.signalMonitor.nextCheckAt=null;lead.signalMonitor.pausedReason='An interrupted source check needs review before scheduled work resumes.';}
       for (const run of (state.prospectSearches || []).filter(run => run.status === 'running')) { run.status = 'failed'; run.error = 'Server restarted; reserved local credits were refunded. Search is not replayed automatically; vendor billing may differ.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); const entry = state.wallet.ledger.find(entry => entry.id === run.reservation); if (entry) entry.externalStatus = 'provider_unknown'; }

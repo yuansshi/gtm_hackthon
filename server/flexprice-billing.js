@@ -58,7 +58,7 @@ export function createFlexpriceBilling({ store, provider = createFlexpriceProvid
     // Existing handlers validate the full request hash before returning a saved
     // result. Let a replay reach that check without authorizing another charge.
     const leadId = path.match(/^\/leads\/([^/]+)\//)?.[1];
-    const runs = path === '/source-intakes' ? state.sourceIntakes : path === '/prospect-searches' ? state.prospectSearches : /\/people-research$/.test(path) ? state.peopleResearch : /\/(?:company\/lookup|contacts\/(?:search|verify))$/.test(path) ? state.enrichmentRuns : path === '/assistant/intake' || /\/drafts$/.test(path) ? state.assistantRuns : /\/signal-checks$/.test(path) ? state.leads.find(lead => lead.id === leadId)?.signalMonitor?.runs : [];
+    const runs = path === '/competitor-research' ? state.competitorResearch : path === '/source-intakes' ? state.sourceIntakes : path === '/prospect-searches' ? state.prospectSearches : /\/people-research$/.test(path) ? state.peopleResearch : /\/(?:company\/lookup|contacts\/(?:search|verify))$/.test(path) ? state.enrichmentRuns : path === '/assistant/intake' || /\/drafts$/.test(path) ? state.assistantRuns : /\/signal-checks$/.test(path) ? state.leads.find(lead => lead.id === leadId)?.signalMonitor?.runs : [];
     if (requestId && (runs || []).some(run => run.id === requestId && (!run.leadId || run.leadId === leadId))) return;
     const draftId = path.match(/^\/drafts\/([^/]+)\/simulate$/)?.[1];
     if (draftId && state.drafts.some(draft => draft.id === draftId && ['simulated', 'accepted'].includes(draft.status))) return;

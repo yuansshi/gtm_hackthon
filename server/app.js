@@ -62,7 +62,7 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
     try {
       const path = req.path;
       const charged = req.method === 'POST' && (
-        ['/discovery', '/source-intakes', '/prospect-searches', '/graph/query'].includes(path) ||
+        ['/discovery', '/source-intakes', '/prospect-searches', '/competitor-research', '/graph/query'].includes(path) ||
         /^\/leads\/[^/]+\/(?:enrich|people-research|signal-checks|company\/lookup|contacts\/(?:search|verify))$/.test(path) ||
         /^\/drafts\/[^/]+\/simulate$/.test(path) ||
         (path === '/assistant/intake' && req.body?.mode === 'model') ||
@@ -74,6 +74,25 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   const view = (req, res) => res.json(service.snapshot(req.params.business));
   app.get(base, view);
+  const competitiveDecision = { requestId: z.string().uuid(), revision, acknowledged: z.boolean() };
+  app.post(base + '/competitor-research', (req, res) => {
+    const input = parse(z.object({ ...competitiveDecision, referenceId: z.string().min(1).max(100).nullable(), name: z.string().trim().min(1).max(200), category: z.enum(['Direct', 'Indirect', 'Alternative']), sourceUrl: z.string().max(2000), detailUrl: z.string().max(2000).nullable() }).strict(), req.body);
+    const run = service.startCompetitorResearch(req.params.business, input);
+    res.status(202).json({ ...service.snapshot(req.params.business), activeCompetitorResearchId: run.id });
+  });
+  app.post(base + '/competitor-research/:run/review', async (req, res) => {
+    const quote = z.string().max(2000);
+    const input = parse(z.object({ ...competitiveDecision, identityQuote: quote, positioningQuote: quote, pricingMode: z.enum(['published', 'quote_required', 'not_established']), pricingQuote: quote, packagingQuote: quote, differentiatorQuote: quote, comparisonNote: z.string().max(1000) }).strict(), req.body);
+    res.json(await service.reviewCompetitor(req.params.business, req.params.run, input));
+  });
+  app.post(base + '/competitor-research/:run/dismiss', (req, res) => {
+    const input = parse(z.object({ revision }).strict(), req.body);
+    res.json(service.dismissCompetitorResearch(req.params.business, req.params.run, input.revision));
+  });
+  app.post(base + '/competitors/withdraw', async (req, res) => {
+    const input = parse(z.object({ ...competitiveDecision, reviewId: z.string().uuid() }).strict(), req.body);
+    res.json(await service.withdrawCompetitor(req.params.business, input));
+  });
   const billingConsent = z.object({ revision, expectedConsentVersion: revision, bindingHash: z.string().length(64), acknowledged: z.boolean(), acknowledgedRates: z.boolean() }).strict();
   app.post(base + '/billing/flexprice/connect', async (req, res) => res.json(await service.connectBilling(req.params.business, parse(billingConsent, req.body))));
   app.post(base + '/billing/flexprice/pause', (req, res) => res.json(service.pauseBilling(req.params.business, parse(z.object({ revision, expectedConsentVersion: revision, acknowledged: z.boolean() }).strict(), req.body))));

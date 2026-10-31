@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileSearch, RefreshCw, Search, ShieldCheck, X } from 'lucide-react';
 import './accounts.css';
 import { WebsiteIntake, WebsiteQueue } from './WebsiteIntake.jsx';
@@ -9,6 +9,7 @@ import { signalHold } from './market-signals.js';
 import { CompanyResearch } from './CompanyResearch.jsx';
 import { PeopleResearch } from './PeopleResearch.jsx';
 import { companyHoldReasons } from './company-evidence.js';
+const CompetitiveLandscape = lazy(() => import('./CompetitorResearch.jsx')); 
 
 const formatDate = value => {
   const date = value ? new Date(value) : null;
@@ -97,7 +98,7 @@ export function Discovery({ state, act, busy, go, focusAccountId, onFocusHandled
   const handledView = useRef(null);
   const previousBusiness = useRef(state.businessId);
   const accounts = useMemo(() => (state.leads || []).filter(account => !account.businessId || account.businessId === state.businessId), [state.leads, state.businessId]);
-  const job = state.jobs?.[0];
+  const job = state.jobs?.find(item => item.kind !== 'competitor_research');
   const running = state.jobs?.some(run => run.status === 'running');
   const shortlisted = accounts.filter(account => account.selected && !account.excludedReason);
   const excluded = accounts.filter(account => account.excludedReason);
@@ -151,7 +152,7 @@ export function Discovery({ state, act, busy, go, focusAccountId, onFocusHandled
       {!!visibleExclusions.length && <div className="ar-exclusion-list"><h3>Excluded during the latest research run</h3><p>These candidates have no stored account detail for this run.</p>{visibleExclusions.map((item, index) => <div key={`${item.name}-${index}`}><strong>{item.name}</strong><span>{item.reason}</span></div>)}</div>}
       <footer className="ar-table-footer"><span>{visible.length} of {accounts.length} account records{query ? ' match the search' : ''}</span><span>Research fit is a hypothesis; buying intent is unconfirmed.</span></footer>
     </section>
-    <details className="ar-competitors"><summary><div><strong>Competitive landscape</strong><span>{state.competitors?.length || 0} positioning references</span></div><ChevronDown size={16} /></summary><div className="ar-competitor-content"><p>Use documented capabilities to guide qualification. Public pricing is not established.</p>{state.competitors?.length ? state.competitors.map(competitor => <article key={competitor.id}><div><h3>{competitor.name}</h3><span className="ar-badge">{competitor.category}</span></div><p>{competitor.focus}</p><p>{competitor.angle}</p><span className="ar-cell-secondary">{competitor.pricing}</span><SourceLink url={competitor.source}>Reference source</SourceLink></article>) : <p>No competitive references are recorded for this business.</p>}</div></details>
+    <Suspense fallback={<div className="ar-competitors">Loading competitive research…</div>}><CompetitiveLandscape state={state} act={act} busy={busy}/></Suspense>
     <footer className="ar-workflow-next"><span><Check size={15} />{shortlisted.length} accounts shortlisted for {state.company?.name}</span><button className="ar-button ar-button-secondary" onClick={() => go('graph')}>Explore relationships<ArrowRight size={14} /></button></footer>
     {prospectSearch && <ProspectSearch key={`${state.businessId}:${prospectSearch.id}`} state={state} act={act} busy={busy} initialRunId={prospectSearch.id} close={() => setProspectSearch(null)} reviewSources={id => { setProspectSearch(null); setWebsite({ id }); }} researchWebsite={urls => { setProspectSearch(null); setWebsite({ id: '', urls }); }} openAccount={id => { setProspectSearch(null); setSelection({ businessId: state.businessId, id }); setPreviewOpen(true); setTab('Evidence'); }} />}
     {website && <WebsiteIntake key={`${state.businessId}:${website.id}`} state={state} act={act} busy={busy} initialIntakeId={website.id} initialUrls={website.urls} close={() => setWebsite(null)} admitted={id => { setSelection({ businessId: state.businessId, id }); setPreviewOpen(true); setTab('Evidence'); setView('all'); setFilter(''); }} />}

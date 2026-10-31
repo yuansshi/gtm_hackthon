@@ -79,7 +79,7 @@ This redesign does not add live buying-intent verification, provider connections
 
 ## Validation
 
-- The initial redesign passed all 25 then-existing tests. The expanded portal now passes all 190 tests and its production build, including business scoping, exact-version approval, edit invalidation, persistence, quota checks, and native graph paths.
+- The initial redesign passed all 25 then-existing tests. The expanded portal now passes all 204 tests and its production build, including business scoping, exact-version approval, edit invalidation, persistence, quota checks, and native graph paths.
 - Browser verified at the default 1280 × 720 desktop viewport with no page-level horizontal overflow in HITL. Wide account tables and the ten-stage board scroll within their own working areas.
 - Verified summary-to-shortlist navigation, account search/sort, evidence tabs, previous/next preview, Escape dismissal, and command-search account handoff.
 - Verified board/list switching, scope and stage filter intersection, empty results, search, and clear-filter recovery.
