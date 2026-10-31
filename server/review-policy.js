@@ -1,6 +1,7 @@
+import { recipientCommunicationBlock } from './communication-policy.js';
 import { digest } from './store.js';
 
-export const suppressedContact = (state, recipient) => (String(recipient || '').toLowerCase().match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/g) || []).some(email => (state.contactSuppressions || []).some(item => item.addressHash === digest({ businessId: state.businessId, email })));
+export const suppressedContact = (state, recipient) => !!recipientCommunicationBlock(state, 'email', recipient) || (String(recipient || '').toLowerCase().match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/g) || []).some(email => (state.contactSuppressions || []).some(item => item.addressHash === digest({ businessId: state.businessId, email })));
 
 // A new account context invalidates pending acknowledgements as well as approvals.
 export function invalidateAccountDrafts(state, leadId, { reason, outcomeId = null, intakeId = null }) {

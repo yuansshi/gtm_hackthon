@@ -3,6 +3,7 @@ import { costs } from './catalog.js';
 import { validContactVerification } from '../src/contact-evidence.js';
 import { emailForDomain } from './hunter.js';
 import { invalidateAccountDrafts, suppressedContact } from './review-policy.js';
+import { communicationContext, requireCommunicationAllowed, recipientCommunicationBlock } from './communication-policy.js';
 import { publicSourceUrl, readPublicSource } from './public-source.js';
 import { companyFieldLabels, companyEvidenceKey } from '../src/company-evidence.js';
 
@@ -21,6 +22,8 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
   const checkContext=(state,lead,run,kind=run?.kind)=>{
     if(!state.approved)throw new AppError(409,'Approve the current profile before vendor research.','profile_approval_required');requireEligible(kind==='company'?{...lead,companyProfile:null}:lead,state);
     if(kind==='company'&&(state.companyRestrictions||[]).some(item=>item.domainHash===digest({businessId:state.businessId,domain:lead.domain.replace(/^www\./,'')})))throw new AppError(409,'Vendor processing of this company domain is restricted.','company_processing_restricted');
+    if(run && (run.communicationContext ? run.communicationContext !== communicationContext(state) : (state.communicationRestrictions||[]).length > 0)) throw new AppError(409,'Communication preferences changed. Start fresh vendor research.','stale_communication_context');
+    if(run?.email) requireCommunicationAllowed(state,lead,'email',run.email);
     if(run&&(run.profileHash!==profileDigest(state)||run.evidenceHash!==contactEvidenceDigest(lead)))throw new AppError(409,'Account or profile evidence changed. Start fresh vendor research.','stale_enrichment_context');
   };
   const fresh=run=>{if(Date.now()-Date.parse(run.completedAt)>86400000||!Number.isFinite(Date.parse(run.completedAt)))throw new AppError(409,'These vendor results are over 24 hours old. Run fresh research.','enrichment_result_expired');};
@@ -41,7 +44,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
     if(kind==='company'&&(state.enrichmentRuns||[]).filter(run=>run.kind==='company').length>=30)throw new AppError(409,'This prototype reached its 30-company-lookup history limit. Review/export this campaign before more company work.','company_history_full');
     if((state.enrichmentRuns||[]).some(run=>['running','pending'].includes(run.status)))throw new AppError(409,'Finish the current vendor contact request before starting another.','enrichment_in_progress');
     const reservation=store.reserve(id,'vendor_'+kind,costs.enrichment,leadId);
-    const run={id:input.requestId,leadId,businessId:id,kind,domain:lead.domain.replace(/^www\./,''),requestHash,profileHash:profileDigest(state),evidenceHash:contactEvidenceDigest(lead),status:'running',startedAt:now(),reservation,requests:0,...extra};
+    const run={id:input.requestId,leadId,businessId:id,kind,domain:lead.domain.replace(/^www\./,''),requestHash,profileHash:profileDigest(state),evidenceHash:contactEvidenceDigest(lead),communicationContext:communicationContext(state),status:'running',startedAt:now(),reservation,requests:0,...extra};
     store.mutate(id,current=>{current.enrichmentRuns||=[];current.enrichmentRuns.unshift(run);const entry=current.wallet.ledger.find(entry=>entry.id===reservation);entry.provider='Hunter';entry.providerBilling='Local credits are separate from Hunter charges.';entry.externalStatus='provider_requested';entry.enrichmentRunId=run.id;addActivity(current,kind==='company'?'Company enrichment started':kind==='search'?'Vendor contact search started':'Vendor email verification started',`${lead.name}; Hunter ${kind}. Explicit external-processing confirmation recorded. No recipient or outreach approval changed.`,'Enrichment agent',{leadId,enrichmentRunId:run.id});});
     return {run,lead};
   };
@@ -120,7 +123,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
       if(!result.providerValid&&!input.acknowledgedUncertain)throw new AppError(400,'Acknowledge the uncertain or accept-all result. It does not establish deliverability.','uncertain_contact_review_required');
       store.mutate(id,state=>{
         const current=leadFor(state,leadId);checkContext(state,current,verification);
-        const contact={email:candidate.email,name:candidate.name,role:candidate.role,emailKind:candidate.addressType==='personal'?'Vendor-returned personal business address':'Vendor-returned company address',linkedIn:candidate.linkedIn,source:candidate.sources[0].url,sources:candidate.sources,mailboxStatus:result.providerValid?'provider_valid':result.acceptAll?'accept_all':'unknown',mxStatus:result.mxFound?'found':'not_found',mxVerificationProvider:'Hunter',verificationProvider:'Hunter',verification:result,checkedAt:result.checkedAt,roleMatch:'Owner-reviewed persona relevance; buying authority unverified',selectedReviewId:input.requestId,provenance:'hunter_reviewed',enrichmentNote:'Hunter reports dated email checks. A valid result does not establish inbox delivery, profile ownership, purchasing authority, or consent to outreach.'};
+        const contact={email:candidate.email,name:candidate.name,role:candidate.role,emailKind:candidate.addressType==='personal'?'Vendor-returned personal business address':'Vendor-returned company address',linkedIn:recipientCommunicationBlock(state,'linkedin',candidate.linkedIn)?null:candidate.linkedIn,source:candidate.sources[0].url,sources:candidate.sources,mailboxStatus:result.providerValid?'provider_valid':result.acceptAll?'accept_all':'unknown',mxStatus:result.mxFound?'found':'not_found',mxVerificationProvider:'Hunter',verificationProvider:'Hunter',verification:result,checkedAt:result.checkedAt,roleMatch:'Owner-reviewed persona relevance; buying authority unverified',selectedReviewId:input.requestId,provenance:'hunter_reviewed',enrichmentNote:'Hunter reports dated email checks. A valid result does not establish inbox delivery, profile ownership, purchasing authority, or consent to outreach.'};
         current.contact=contact;
         if(candidate.name){current.vendorPeople||=[];const person={name:candidate.name,role:candidate.role||'Role unknown',relevance:'Vendor-returned role reviewed for persona relevance; buying responsibility is unverified.',source:candidate.sources[0].url,provenance:'hunter_reviewed',vendorCandidateId:candidate.id,reviewedAt:now()};current.vendorPeople=mergeAccountPeople(current.vendorPeople,[person]);current.people=mergeAccountPeople(current.people,current.vendorPeople);}
         const ids=invalidateAccountDrafts(state,leadId,{reason:'account_contact_changed'});

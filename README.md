@@ -224,3 +224,7 @@ Current competitive-research verification: all 204 tests and the production buil
 Snyk status: the owner temporarily disabled its CI job in the current PR. A skipped job is not a completed SAST/SCA scan; project credentials, re-enabling the job and actual passing scans are still outstanding.
 
 Published buying windows: [Buying signals](docs/buying-signals.md) documents account-side job/evaluation and renewal/churn linking, exact source/date review, native active paths and currency controls. These associations never approve messages. The full suite now has 216 passing tests, including 12 buying-evidence tests; the production build passes.
+
+Communication preferences: use **HITL review → Communication preferences** or **account → Contacts** to record business-scoped account/email/LinkedIn holds. Holds clear affected editable approvals, block matching contact processing and outreach, survive reset/restart, and require a versioned decision to release. Provider restrictions remain separate. This records user-reported preferences, not verified consent. See [controls and limits](docs/communication-preferences.md).
+
+Current validation: **228 tests pass**, including 12 communication-control tests; production build passes.

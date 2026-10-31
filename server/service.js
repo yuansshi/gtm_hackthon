@@ -25,6 +25,8 @@ import { createPeopleResearch, markPersonProjection } from './people-research.js
 import { createFlexpriceBilling } from './flexprice-billing.js';
 import { createFlexpriceProvider } from './flexprice-provider.js';
 import { graphContextKey } from '../src/graph-context.js';
+import { communicationStatus, requireCommunicationAllowed, requireAccountCommunication, communicationContext } from './communication-policy.js';
+import { createCommunicationControls } from './communication-controls.js';
 
 export const profileKeys = ['company', 'productFamilies', 'capabilities', 'commercial', 'icp', 'expansionDecisions'];
 export const profileDigest = s => digest(Object.fromEntries(profileKeys.map(k => [k, s[k]])));
@@ -41,7 +43,7 @@ export function exclusionReason(lead, state) {
   if (matchesExcludedDomain(lead.domain.toLowerCase().replace(/^www\./, ''), domains)) return 'Excluded company domain in customer profile.';
   return null;
 }
-const requireEligible = (lead, state) => { const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
+const requireEligible = (lead, state) => { requireAccountCommunication(state, lead); const reason = exclusionReason(lead, state); if (reason) throw new AppError(409, reason, 'account_excluded'); };
 const accountContextDigest = lead => digest({ source: lead.source, sourceIntakeId: lead.sourceIntakeId, facts: lead.facts, application: lead.application, signal: lead.signal, marketSignals: signalContext(lead), company:reviewedCompanyContext(lead), people: lead.people, contact: lead.contact, outcomes: lead.events?.filter(event => event.recordType === 'outcome').map(event => event.id) });
 const requireFreshSignals = (draft, lead) => { for (const id of draft.linkedSignalIds || []) if (!signalFresh((lead.marketSignals || []).find(signal => signal.id === id) || {})) throw new AppError(409, 'Linked market evidence changed or expired. Refresh/review the source and prepare the draft again before approval or dispatch.', 'stale_market_signal'); };
 const requireFreshCompany = (draft,lead) => {if(!draftCompanyEvidenceCurrent(draft,lead))throw new AppError(409,'The company evidence used by this model draft changed or expired. Prepare a fresh draft from current reviewed HQ evidence before approval or dispatch.','stale_company_context');};
@@ -73,7 +75,8 @@ export function metrics(state, { asOf } = {}) {
 
 export function createService({ store, graph, review = reviewCandidate, mx = checkMx, model = createModelProvider(), readWebsiteSource = readPublicSource, hunter = createHunterProvider(), prospectProvider = createProspectSearchProvider(), flexpriceProvider = createFlexpriceProvider() }) {
   const flexpriceBilling = createFlexpriceBilling({ store, provider: flexpriceProvider });
-  const snapshot = id => { const s = store.read(id); return { ...s, billing: billingSummary(s), flexprice: flexpriceBilling.view(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), prospectSearch: prospectProvider.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+  const snapshot = id => { const s = store.read(id); return { ...s, leads: s.leads.map(lead => ({ ...lead, communicationStatus: { account: communicationStatus(s, lead, 'email', ''), email: communicationStatus(s, lead, 'email', lead.contact?.email), linkedin: communicationStatus(s, lead, 'linkedin', lead.contact?.linkedIn) } })), drafts: s.drafts.map(draft => ({ ...draft, communicationStatus: communicationStatus(s, s.leads.find(lead => lead.id === draft.leadId), draft.channel, draft.recipient) })), billing: billingSummary(s), flexprice: flexpriceBilling.view(s), assistantRuns: (s.assistantRuns || []).map(r => ({ ...r, applicable: r.profileHash === profileDigest(s) })), assistant: model.status(), enrichment: hunter.status(), prospectSearch: prospectProvider.status(), competitors: competitors[id], metrics: metrics(s), researchBrief: createResearchBrief(s) }; };
+  const communicationControls = createCommunicationControls({ store, snapshot });
   const websiteIntake = createWebsiteIntake({ store, graph, competitors, snapshot, profileDigest, exclusionReason, readSource: readWebsiteSource });
   const prospectSearch = createProspectSearch({ store, provider: prospectProvider, readSource: readWebsiteSource, stageIntake: websiteIntake.stageSearchIntake, snapshot, profileDigest });
   const contactEnrichment = createContactEnrichment({ store, graph, competitors, provider: hunter, snapshot, profileDigest, requireEligible, exclusionReason, readSource:readWebsiteSource });
@@ -232,12 +235,14 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!initial.approved) throw new AppError(409, 'Customer profile approval is required.', 'profile_approval_required');
     const email = lead.contact?.email || lead.publicEmail;
     if (suppressedContact(initial, email)) throw new AppError(409, 'Processing of this address is restricted.', 'contact_suppressed');
+    const policyContext = communicationContext(initial);
     const reservation = store.reserve(id, 'enrichment', costs.enrichment, leadId);
     try {
       const result = email ? await mx(email) : { status: 'not_available', records: [] };
       store.mutate(id, s => {
         const current = findLead(s, leadId);
         requireEligible(current, s);
+        if (suppressedContact(s, email) || communicationContext(s) !== policyContext) throw new AppError(409, 'Communication preferences changed during the contact check. Start a fresh check.', 'stale_communication_context');
         if (!s.approved || profileDigest(s) !== profileDigest(initial) || (current.contact?.email || current.publicEmail) !== email || current.sourceIntakeId !== lead.sourceIntakeId) throw new AppError(409, 'Account or profile evidence changed during the contact check. Check it again.', 'stale_account_context');
         current.contact = { ...current.contact, mxStatus: result.status, mxRecords: result.records, checkedAt: now(), mailboxStatus: current.contact.mailboxStatus || 'unverified', mxVerificationProvider: 'DNS MX', verificationProvider: current.contact.verificationProvider || 'Public source + DNS MX', enrichmentNote: current.contact.provenance === 'hunter_reviewed' ? 'This updates DNS routing only. Hunter checks retain their original provider date; routing does not establish inbox delivery or buying authority.' : 'DNS mail routing does not verify this mailbox or identify a purchasing decision-maker. Configure a vendor for deliverability verification.' };
         addActivity(s, 'Contact research checked', `${lead.name}: ${email ? 'selected company address; MX ' + result.status : 'no public email established'}. This DNS check does not establish mailbox deliverability or buyer authority.`, 'Enrichment agent');
@@ -250,6 +255,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!s.approved) throw new AppError(409, 'Approve the current profile before drafting.', 'profile_approval_required');
     const lead = findLead(s, leadId); if (!lead.selected) throw new AppError(409, 'Shortlist the account first.', 'shortlist_required');
     requireEligible(lead, s);
+    requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
     const existing = s.drafts.find(d => !d.modelMetadata && d.leadId === leadId && d.channel === channel && d.variant === variant && d.sequenceStep === sequenceStep && d.profileHash === profileDigest(s));
     const currentSignalHash = digest({ context: signalContext(lead), usableIds: activeSignals(lead).map(signal=>signal.id) });
     if (existing && (['accepted','simulated','dispatching'].includes(existing.status) || existing.signalContextHash === currentSignalHash || (!existing.signalContextHash && !signalContext(lead).length))) return existing.id;
@@ -273,8 +279,10 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!acknowledgedExternalProcessing) throw new AppError(400, 'Confirm sending the supplier profile and this account’s public evidence to the project model.', 'external_processing_review_required');
     const before = store.read(id); const account = findLead(before, leadId);
     const accountHash = accountContextDigest(account);
+    const policyContext = communicationContext(before);
     if (!before.approved || !account.selected) throw new AppError(409, 'Approve the profile and shortlist this account first.', 'profile_approval_required');
     requireEligible(account, before);
+    requireCommunicationAllowed(before, account, channel, channel === 'email' ? account.contact?.email : account.contact?.linkedIn);
     const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep }, 'model', revision);
     if (started.previous) return { ...snapshot(id), activeDraftId: started.previous.draftId };
     const { initial, run } = started;
@@ -288,6 +296,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       generated = await model.draft({ context, sources, requestId });
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {
         const lead = findLead(s, leadId); requireEligible(lead, s);
+        requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
+        if (communicationContext(s) !== policyContext) throw new AppError(409, 'Communication preferences changed during generation. Prepare a fresh draft.', 'stale_communication_context');
         if (accountContextDigest(lead) !== accountHash) throw new AppError(409, 'Account evidence changed during generation. Review the new context and request a fresh draft.', 'stale_account_context');
         if (!s.approved || !lead.selected) throw new AppError(409, 'Account or profile approval changed during generation.', 'stale_assistant_context');
         const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep], recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
@@ -316,7 +326,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     requireEligible(findLead(s, d.leadId), s);
     requireFreshSignals(d, findLead(s, d.leadId));
     requireFreshCompany(d, findLead(s,d.leadId));
-    if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
+    requireCommunicationAllowed(s, findLead(s, d.leadId), d.channel, d.recipient);
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
     addActivity(s, 'Exact message approved', `Recipient, subject, content, channel, and version ${d.version} recorded for ${findLead(s, d.leadId).name}.`, 'You', { draftId });
@@ -336,7 +346,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       requireEligible(lead, s);
       requireFreshSignals(d, lead);
       requireFreshCompany(d,lead);
-      if (suppressedContact(s, d.recipient)) throw new AppError(409, 'Processing of this recipient is restricted.', 'contact_suppressed');
+      requireCommunicationAllowed(s, findLead(s, d.leadId), d.channel, d.recipient);
       const usage = store.meterSettledUsage(s, { id: randomUUID(), kind: 'outreach', leadId: lead.id, credits: costs.outreach, status: 'consumed', externalStatus: 'not_connected', mode: 'dry_run', at: now() });
       s.wallet.credits -= costs.outreach; s.wallet.ledger.unshift(usage);
       d.status = 'simulated'; d.sentAt = now(); d.deliveryMode = 'dry_run'; d.deliveryId = randomUUID();
@@ -358,5 +368,5 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     try { const state = store.read(id); const contextKey = graphContextKey(state,competitors[id]); await graph.sync(state, competitors[id]); markOutcomeProjection(store, id, state); markWebsiteProjection(store, id, state); markContactProjection(store, id, state); markCompanyProjection(store, id, state); markSignalProjection(store, id, state); markPersonProjection(store, id, state); markCompetitorProjection(store, id, state); markBuyingProjection(store, id, state); const data = await graph.snapshot(id); const paths = await graph.paths(id); const marketPaths = graph.marketPaths ? await graph.marketPaths(id) : []; const warmPaths = graph.warmPaths ? await graph.warmPaths(id) : []; const buyingPaths = graph.buyingPaths ? await graph.buyingPaths(id) : { evaluations: [], displacements: [] }; if (contextKey !== graphContextKey(store.read(id),competitors[id])) throw new AppError(409,'Graph evidence changed during the query. Refresh before using this snapshot.','stale_graph_context'); store.settle(id, reservation, true); return { ...data, paths, marketPaths, warmPaths, buyingPaths, contextKey, queriedAt: now(), contextRevision: store.read(id).revision }; }
     catch (error) { store.settle(id, reservation, false); throw error; }
   };
-  return { prepareBilling: flexpriceBilling.prepare, tickBilling: flexpriceBilling.tick, drainBilling: flexpriceBilling.drain, billingStatus: () => { const views = ['allco','huasheng'].map(id => flexpriceBilling.view(store.read(id))); const active = views.find(view => view.enabled && view.wallet); return { configured: views.some(view => view.configured), connected: !!active, verifiedAt: active?.wallet?.checkedAt || null, status: active ? 'Project wallet checked; usage status in Billing' : views.some(view => view.configured) ? 'Confirmation required in Billing' : 'Not configured' }; }, connectBilling: async (id,input) => { await flexpriceBilling.connect(id,input); return snapshot(id); }, pauseBilling: (id,input) => { flexpriceBilling.pause(id,input); return snapshot(id); }, syncBilling: async (id,input) => { await flexpriceBilling.sync(id,input); return snapshot(id); }, reviewBuyingLink: buyingEvidence.review, withdrawBuyingLink: buyingEvidence.withdraw, startCompetitorResearch: competitorResearch.start, reviewCompetitor: competitorResearch.review, withdrawCompetitor: competitorResearch.withdraw, dismissCompetitorResearch: competitorResearch.dismiss, startPeopleResearch: peopleResearch.start, reviewPerson: peopleResearch.review, withdrawPerson: peopleResearch.withdraw, attestConnection: peopleResearch.connection, revokeConnection: peopleResearch.revoke, dismissPeopleResearch: peopleResearch.dismiss, snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, configureSignalMonitor: marketSignals.configure, startSignalCheck: marketSignals.start, reviewMarketSignal: marketSignals.review, tickSignals: marketSignals.tick, drainSignals: marketSignals.drain, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), lookupCompany:contactEnrichment.company, applyCompany:contactEnrichment.applyCompany, withdrawCompany:contactEnrichment.withdrawCompany, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
+  return { holdCommunication: communicationControls.hold, releaseCommunication: communicationControls.release, prepareBilling: flexpriceBilling.prepare, tickBilling: flexpriceBilling.tick, drainBilling: flexpriceBilling.drain, billingStatus: () => { const views = ['allco','huasheng'].map(id => flexpriceBilling.view(store.read(id))); const active = views.find(view => view.enabled && view.wallet); return { configured: views.some(view => view.configured), connected: !!active, verifiedAt: active?.wallet?.checkedAt || null, status: active ? 'Project wallet checked; usage status in Billing' : views.some(view => view.configured) ? 'Confirmation required in Billing' : 'Not configured' }; }, connectBilling: async (id,input) => { await flexpriceBilling.connect(id,input); return snapshot(id); }, pauseBilling: (id,input) => { flexpriceBilling.pause(id,input); return snapshot(id); }, syncBilling: async (id,input) => { await flexpriceBilling.sync(id,input); return snapshot(id); }, reviewBuyingLink: buyingEvidence.review, withdrawBuyingLink: buyingEvidence.withdraw, startCompetitorResearch: competitorResearch.start, reviewCompetitor: competitorResearch.review, withdrawCompetitor: competitorResearch.withdraw, dismissCompetitorResearch: competitorResearch.dismiss, startPeopleResearch: peopleResearch.start, reviewPerson: peopleResearch.review, withdrawPerson: peopleResearch.withdraw, attestConnection: peopleResearch.connection, revokeConnection: peopleResearch.revoke, dismissPeopleResearch: peopleResearch.dismiss, snapshot, saveProfile, approveProfile, inferProfile, reviewIntake, draftWithModel, startDiscovery, selectLead, enrich, draft, editDraft, approveDraft, rejectDraft, simulateSend, stage, recordOutcome, configureSignalMonitor: marketSignals.configure, startSignalCheck: marketSignals.start, reviewMarketSignal: marketSignals.review, tickSignals: marketSignals.tick, drainSignals: marketSignals.drain, startWebsiteIntake: websiteIntake.start, reviewWebsiteIntake: websiteIntake.review, dismissWebsiteIntake: websiteIntake.dismiss, graphView, startProspectSearch: prospectSearch.start, prospectSearchStatus: () => prospectProvider.status(), lookupCompany:contactEnrichment.company, applyCompany:contactEnrichment.applyCompany, withdrawCompany:contactEnrichment.withdrawCompany, searchContacts: contactEnrichment.search, verifyContact: contactEnrichment.verify, pollContact: contactEnrichment.poll, cancelContact: contactEnrichment.cancel, applyContact: contactEnrichment.apply, enrichmentStatus: () => hunter.status(), assistantStatus: () => model.status() };
 }

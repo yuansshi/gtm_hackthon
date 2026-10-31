@@ -41,7 +41,7 @@ function PersonRecord({ review, account, state, act, busy }) {
         <label>Local relationship note (optional)<textarea value={note} maxLength={500} onChange={event => { setNote(event.target.value); setAck(false); }} rows={2}/></label>
         <p>Notes stay in this workspace and do not enter model requests or graph projection.</p>
         <label className="pe-check"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/>I confirm this relationship from my own knowledge. No introduction is sent.</label>
-        <button className="ar-button ar-button-secondary" disabled={busy || !current || !ack}>Save local connection</button>
+        <button className="ar-button ar-button-secondary" disabled={busy || !!account.communicationStatus?.account?.blocked || !current || !ack}>Save local connection</button>
       </form></details>}
       <details><summary>Withdraw evidence or connection</summary><label className="pe-check"><input type="checkbox" checked={removeAck} onChange={event => setRemoveAck(event.target.checked)}/>Remove this support for future introduction paths.</label><div className="pe-actions">{connection && <button className="ar-button ar-button-secondary" disabled={busy || !removeAck} onClick={() => remove('revoke')}>Revoke connection</button>}<button className="ar-button ar-button-secondary" disabled={busy || !removeAck} onClick={() => remove('withdraw')}>Withdraw person review</button></div></details>
     </>}
@@ -79,7 +79,7 @@ export function PeopleResearch({ account, state, act, busy }) {
         <label>Account-owned role or news page<input type="url" required value={sourceUrl} placeholder={`https://${account.domain}/…`} onChange={event => setSourceUrl(event.target.value)} maxLength={2000}/></label>
         <label>Former employer’s identity page (optional)<input type="url" value={employerUrl} placeholder="https://employer.example/about" onChange={event => setEmployerUrl(event.target.value)} maxLength={2000}/></label>
         <p>Two local credits retrieve up to two public pages. Page instructions are treated as source text; no model is called.</p>
-        <button className="ar-button ar-button-primary" disabled={busy || !state.approved || account.evidenceNeedsReview || state.wallet.credits < 2 || state.jobs.some(job => job.status === 'running')}>Fetch people sources<span>2 credits</span></button>
+        <button className="ar-button ar-button-primary" disabled={busy || !!account.communicationStatus?.account?.blocked || !state.approved || account.evidenceNeedsReview || state.wallet.credits < 2 || state.jobs.some(job => job.status === 'running')}>Fetch people sources<span>2 credits</span></button>
       </form>
       {runs.length > 0 && <label>Research run<select value={run?.id || ''} onChange={event => { setRunId(event.target.value); setAck(false); }}>{runs.map(item => <option key={item.id} value={item.id}>{date(item.startedAt)} · {item.status}</option>)}</select></label>}
       {run?.status === 'running' && <p role="status">Fetching public source text…</p>}
@@ -94,7 +94,7 @@ export function PeopleResearch({ account, state, act, busy }) {
           {run.employerUrl && <label className="pe-check"><input type="checkbox" checked={history} onChange={event => setHistory(event.target.checked)}/>Review former-employer evidence too</label>}
           {history && <><label>Former employer name<input required value={employer} maxLength={200} onChange={event => setEmployer(event.target.value)}/></label><label>Exact former-employment passage (full person and employer names)<textarea required value={historyQuote} minLength={12} maxLength={2000} rows={4} onChange={event => setHistoryQuote(event.target.value)}/></label><label>Exact employer identity passage (organization name)<textarea required value={identityQuote} minLength={12} maxLength={600} rows={3} onChange={event => setIdentityQuote(event.target.value)}/></label></>}
           <label className="pe-check"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/>I reviewed the identity, role and any former employment. Dates, present employment and buying authority remain unverified.</label>
-          <div className="pe-actions"><button className="ar-button ar-button-primary" disabled={busy || !ack || !state.approved}>Save published person</button><button type="button" className="ar-button ar-button-secondary" onClick={dismiss} disabled={busy}>Dismiss source run</button></div>
+          <div className="pe-actions"><button className="ar-button ar-button-primary" disabled={busy || !!account.communicationStatus?.account?.blocked || !ack || !state.approved}>Save published person</button><button type="button" className="ar-button ar-button-secondary" onClick={dismiss} disabled={busy}>Dismiss source run</button></div>
         </form>
       </>}
     </details>

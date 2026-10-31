@@ -14,7 +14,7 @@ export const publicDraft = d => ({ ...d, approvedHash: d.approvedHash || null })
 
 export function initialRuntime(id) {
   return {
-    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], companyReviews: [], companyRestrictions: [], buyingLinks: [], buyingOperations: [], competitorResearch: [], competitorReviews: [], competitorOperations: [], peopleResearch: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
+    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], communicationRestrictions: [], communicationOperations: [], companyReviews: [], companyRestrictions: [], buyingLinks: [], buyingOperations: [], competitorResearch: [], competitorReviews: [], competitorOperations: [], peopleResearch: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
     wallet: { credits: 100, initialCredits: 100, currency: 'demo credits', ledger: [] },
     version: 2, revision: 0, serverPersisted: true,
   };

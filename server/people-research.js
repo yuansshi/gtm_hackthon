@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { AppError, addActivity, digest, now } from './store.js';
 import { publicSourceUrl, readPublicSource, sourceSite } from './public-source.js';
+import { communicationContext, requireAccountCommunication } from './communication-policy.js';
 import { costs } from './catalog.js';
 import { normalizePersonText as clean, personDateFresh, personSourceKey, personReviewCurrent, relationshipLabels } from '../src/people-evidence.js';
 
@@ -74,13 +75,14 @@ export function createPeopleResearch({ store, graph, competitors, snapshot, prof
       if (previous.requestHash !== hash) fail(409, 'This request ID belongs to different people research.', 'person_request_conflict');
       return { id: previous.id, jobId: previous.jobId };
     }
+    requireAccountCommunication(initial, lead);
     if (!initial.approved || lead.evidenceNeedsReview) fail(409, 'Approve the current profile and account sources before people research.', 'profile_approval_required');
     if (initial.revision !== input.revision) fail(409, 'This workspace changed. Reload before researching people.', 'revision_conflict');
     if (initial.jobs.some(job => job.status === 'running')) fail(409, 'Wait for current source research to finish.', 'job_running');
     if ((initial.peopleResearch || []).length >= 100 || (initial.peopleResearch || []).filter(run => run.status === 'ready').length >= 10) fail(409, 'Review or dismiss pending people research before starting more.', 'people_research_limit');
     const reservation = store.reserve(id, 'people_research', costs.people_research, leadId);
     const job = { id: randomUUID(), kind: 'people_research', status: 'running', startedAt: now(), steps: [], reservation };
-    const run = { id: input.requestId, jobId: job.id, leadId, sourceUrl, employerUrl, requestHash: hash, profileHash: profileDigest(initial), accountKey: personSourceKey(lead), status: 'running', startedAt: now(), reservation, pages: [] };
+    const run = { id: input.requestId, jobId: job.id, leadId, sourceUrl, employerUrl, requestHash: hash, profileHash: profileDigest(initial), communicationContext: communicationContext(initial), accountKey: personSourceKey(lead), status: 'running', startedAt: now(), reservation, pages: [] };
     store.mutate(id, state => { state.peopleResearch ||= []; state.peopleResearch.unshift(run); state.jobs.unshift(job); addActivity(state, 'People source research started', `${lead.name}; exact role and employment passages require review. Two local credits reserved.`, 'Planner', { leadId }); });
     const completion = (async () => {
       let outcomes = [], changed = false;
@@ -98,6 +100,8 @@ export function createPeopleResearch({ store, graph, competitors, snapshot, prof
         const pages = outcomes.map(item => item.page);
         store.mutate(id, state => {
           changed = checkExistingReviews(state, outcomes, run.id);
+          requireAccountCommunication(state, leadFor(state, leadId));
+          if (run.communicationContext !== communicationContext(state)) fail(409, 'Communication preferences changed during retrieval. Fetch fresh sources.', 'stale_communication_context');
           if (!state.approved || profileDigest(state) !== run.profileHash || personSourceKey(leadFor(state, leadId)) !== run.accountKey) fail(409, 'The account or profile changed during retrieval. Fetch fresh sources.', 'stale_person_context');
           Object.assign(runFor(state, leadId, run.id), { status: 'ready', pages, completedAt: now() });
           Object.assign(state.jobs.find(item => item.id === job.id), { status: 'completed', completedAt: now(), steps: [{ actor: 'Builder', summary: 'Bounded public pages fetched with pinned DNS and TLS verification.', at: now() }, { actor: 'Reviewer', summary: 'No person or connection inferred. Review exact source passages.', at: now() }] });
@@ -122,6 +126,8 @@ export function createPeopleResearch({ store, graph, competitors, snapshot, prof
     const values = { runId, name: clean(input.name), role: clean(input.role), roleQuote: clean(input.roleQuote), formerEmployer: input.formerEmployer ? { name: clean(input.formerEmployer.name), quote: clean(input.formerEmployer.quote), identityQuote: clean(input.formerEmployer.identityQuote) } : null };
     operation(id, leadId, input, 'review', values, (state, lead) => {
       const run = runFor(state, leadId, runId);
+      requireAccountCommunication(state, lead);
+      if (run.communicationContext ? run.communicationContext !== communicationContext(state) : (state.communicationRestrictions || []).length > 0) fail(409, 'Communication preferences changed. Fetch fresh people sources.', 'stale_communication_context');
       if (run.status !== 'ready' || !state.approved || run.profileHash !== profileDigest(state) || run.accountKey !== personSourceKey(lead)) fail(409, 'Fetch fresh sources for the current approved profile and account.', 'stale_person_context');
       if (run.pages.some(page => !personDateFresh(page.checkedAt, Date.now(), 1))) fail(409, 'Source snapshots are over 24 hours old. Retrieve fresh pages.', 'person_source_expired');
       if ((state.personReviews || []).length >= 500) fail(409, 'This workspace has reached its published-person review limit.', 'person_review_limit');
