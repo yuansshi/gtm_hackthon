@@ -1,0 +1,159 @@
+1
+00:00:00,300 --> 00:00:06,103
+G T M Engine connects industrial product intake, account research, graph matching,
+
+2
+00:00:06,103 --> 00:00:12,615
+reviewed outreach, and pipeline tracking. This updated walkthrough follows Allco Hydraulic’s
+
+3
+00:00:12,615 --> 00:00:14,667
+United States O E M campaign.
+
+4
+00:00:15,550 --> 00:00:21,363
+Start with the product description and buyer criteria. Local extraction proposes fields
+
+5
+00:00:21,363 --> 00:00:23,635
+without an external model request.
+
+6
+00:00:23,835 --> 00:00:30,036
+Review each suggestion before applying it. Job titles and seniority are research targets,
+
+7
+00:00:30,036 --> 00:00:32,057
+not verified decision makers.
+
+8
+00:00:32,257 --> 00:00:37,512
+Technical limits stay unconfirmed. Review capabilities and approve this business’s
+
+9
+00:00:37,512 --> 00:00:39,563
+profile before account research.
+
+10
+00:00:40,550 --> 00:00:45,520
+Discovery checks public company sources against the approved scope and exclusions.
+
+11
+00:00:45,720 --> 00:00:51,400
+Inspect the account’s application hypothesis, citations, score components, and unknowns
+
+12
+00:00:51,400 --> 00:00:52,901
+before shortlisting it.
+
+13
+00:00:53,101 --> 00:00:59,257
+This example uses Elliott Equipment. Relevant equipment does not establish buying intent,
+
+14
+00:00:59,257 --> 00:01:02,231
+compatibility, or a verified buyer mailbox.
+
+15
+00:01:03,050 --> 00:01:08,372
+The native Kuzu database connects published people, companies, supplier products, and
+
+16
+00:01:08,372 --> 00:01:08,873
+signals.
+
+17
+00:01:09,073 --> 00:01:14,656
+Query actual directional paths and inspect the supporting source. A published leadership
+
+18
+00:01:14,656 --> 00:01:20,302
+role can connect to the company and a possible product application. Authority and current
+
+19
+00:01:20,302 --> 00:01:22,523
+purchasing needs remain unverified.
+
+20
+00:01:23,550 --> 00:01:28,951
+Create a source-grounded template for the shortlisted account. Choose the channel,
+
+21
+00:01:28,951 --> 00:01:34,549
+variant, sequence step, audience, tone, value-proposition focus, word limit, and call
+
+22
+00:01:34,549 --> 00:01:35,208
+to action.
+
+23
+00:01:35,408 --> 00:01:40,841
+The saved message brief travels with the draft. Review the recipient, wording, and
+
+24
+00:01:40,841 --> 00:01:45,545
+citations; a public company address is not a verified individual buyer.
+
+25
+00:01:46,550 --> 00:01:51,863
+The amber human-review checkpoint blocks dispatch until the exact version is acknowledged
+
+26
+00:01:51,863 --> 00:01:52,639
+and approved.
+
+27
+00:01:52,839 --> 00:01:58,063
+Saving a subject edit clears that approval. The server requires a fresh review of the
+
+28
+00:01:58,063 --> 00:01:58,801
+new version.
+
+29
+00:01:59,001 --> 00:02:04,765
+After reapproval, record a dry run. It creates one local receipt and credit charge.
+
+30
+00:02:04,765 --> 00:02:07,960
+No external email or LinkedIn message is sent.
+
+31
+00:02:08,800 --> 00:02:14,810
+The same stored event updates the pipeline. Elliott moves to Contacted, with the dry-run
+
+32
+00:02:14,810 --> 00:02:17,337
+mode, actor, and timestamp preserved.
+
+33
+00:02:17,537 --> 00:02:23,277
+Record a sales owner and next action without inventing a reply or moving the opportunity.
+
+34
+00:02:23,477 --> 00:02:28,869
+Board, list, and analytics share the campaign records. Reloading preserves the receipt,
+
+35
+00:02:28,869 --> 00:02:30,356
+assignment, and balance.
+
+36
+00:02:31,300 --> 00:02:35,811
+Billing distinguishes local demo credits from actual provider charges.
+
+37
+00:02:36,011 --> 00:02:42,057
+Live model, enrichment, Band, Flexprice, and email connections remain disabled. Public
+
+38
+00:02:42,057 --> 00:02:45,713
+hosting and Snyk verification are still outstanding.
+
+39
+00:02:45,913 --> 00:02:51,853
+The result is a connected industrial workflow, with evidence, unknowns, and human decisions
+
+40
+00:02:51,853 --> 00:02:53,485
+visible at every handoff.

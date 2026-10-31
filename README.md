@@ -105,7 +105,7 @@ The GitHub workflow runs verification checks. Its Snyk source/dependency jobs ar
 - `docs/system-design.md`, `docs/rubric-status.md`, `docs/demo-script.md`, `docs/demo-narration.md`: submission preparation and remaining gaps.
 - `src/legacy-demo.jsx`, `src/data.js`: original fictional SaaS fixtures preserved; not used as industrial prospects.
 
-The current [public demonstration video](https://youtu.be/lXMJIpLYfAc) is 2:47, with Kokoro Heart narration and English captions. It shows product intake, graph matching, composition, exact-version HITL review, and dashboard synchronization in demo mode. The earlier 2:51 walkthrough transcript remains archived in docs/demo-narration.md.
+The updated desktop demonstration is 2:54 at 1080p, with local Kokoro Heart narration, English captions, the current workbench, saved message briefs, approval clearing after edits, pipeline ownership and local credits. The verified local video is ready; its public YouTube upload awaits the owner’s agreement confirmation. [Recording evidence, chapters and reproduction](docs/demo-current/README.md) distinguish actual UI captures/native Kuzu/public source retrieval from disabled provider integrations and dry-run outreach. The [earlier public video](https://youtu.be/lXMJIpLYfAc) and 2:51 transcript in docs/demo-narration.md remain archived and show earlier interfaces.
 
 ## Optional project AI
 
