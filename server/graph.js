@@ -83,7 +83,7 @@ export async function createGraph(directory) {
           const outbound = state.drafts.filter(d => d.leadId === lead.id && ['simulated', 'accepted'].includes(d.status));
           for (const draft of outbound) {
             const outreachId = prefix + 'outreach:' + draft.id;
-            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { draftId: draft.id, channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, mode: draft.status === 'simulated' ? 'dry_run' : 'live', at: draft.sentAt, description: draft.status === 'simulated' ? 'Local dry run; no external message sent.' : 'Provider acceptance; inbox delivery not established.' });
+            await node('Signal', outreachId, `${draft.channel} outreach`, businessId, { draftId: draft.id, channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, mode: draft.status === 'simulated' ? 'dry_run' : 'live', at: draft.sentAt, deliveryProvider: draft.deliveryProvider || null, providerStatus: draft.deliveryStatus || null, providerAcceptedAt: draft.providerAcceptedAt || null, signedReceiptAt: draft.deliveryReceiptAt || null, description: draft.status === 'simulated' ? 'Local dry run; no external message sent.' : 'Provider acceptance; inbox delivery not established.' });
             await edge('contacted_via', companyId, outreachId, businessId, draft.id);
           }
           for (const report of (lead.events || []).filter(event => event.recordType === 'outcome')) {

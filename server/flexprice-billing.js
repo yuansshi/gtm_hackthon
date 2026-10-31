@@ -5,7 +5,7 @@ import { creditMicros, createFlexpriceProvider } from './flexprice-provider.js';
 const unresolved = entry => entry.metering && !['processed', 'not_billed'].includes(entry.metering.status);
 const fail = (status, message, code) => { throw new AppError(status, message, code); };
 const eventFor = (state, id) => state.wallet.ledger.find(entry => entry.id === id && entry.metering) || fail(404, 'Metered usage event not found in this business.', 'metering_event_not_found');
-const operationLabel = kind => kind === 'graph_query' ? 'graph_query_evaluated' : kind === 'outreach' ? 'outreach_dry_run' : /vendor_|enrichment/.test(kind) ? 'enrichment_check_completed' : kind === 'inference' ? 'ai_request_completed' : kind === 'market_signals' ? 'market_source_check_completed' : 'source_research_completed';
+const operationLabel = (kind, mode) => kind === 'graph_query' ? 'graph_query_evaluated' : kind === 'outreach' ? mode === 'live' ? 'outreach_sent' : 'outreach_dry_run' : /vendor_|enrichment/.test(kind) ? 'enrichment_check_completed' : kind === 'inference' ? 'ai_request_completed' : kind === 'market_signals' ? 'market_source_check_completed' : 'source_research_completed';
 
 export function createFlexpriceBilling({ store, provider = createFlexpriceProvider() }) {
   const cache = new Map(), running = new Map();
@@ -38,7 +38,7 @@ export function createFlexpriceBilling({ store, provider = createFlexpriceProvid
       if (!sameContext(state.flexprice.consent, wallet)) fail(409, 'The Flexprice environment or credit conversion changed. Refresh Billing and confirm the new contract.', 'flexprice_wallet_context_changed');
       if (creditMicros(wallet.creditBalance) < BigInt(entry.credits) * 1000000n) fail(402, `The project Flexprice wallet needs ${entry.credits} ${entry.credits === 1 ? 'credit' : 'credits'} for this operation. Local demo reloads do not fund it.`, 'flexprice_insufficient_credits');
       state.flexprice.lastWallet = wallet;
-      entry.metering = { id: entry.id, bindingHash: config.hash, environmentId: wallet.environmentId, currency: wallet.currency, conversionRate: wallet.conversionRate, status: 'reserved', creditUnits: String(entry.credits), operation: operationLabel(entry.kind), leadKey: entry.leadId ? digest({ businessId: state.businessId, leadId: entry.leadId }) : null, reservedAt: now(), attempts: 0 };
+      entry.metering = { id: entry.id, bindingHash: config.hash, environmentId: wallet.environmentId, currency: wallet.currency, conversionRate: wallet.conversionRate, status: 'reserved', creditUnits: String(entry.credits), operation: operationLabel(entry.kind, entry.mode), leadKey: entry.leadId ? digest({ businessId: state.businessId, leadId: entry.leadId }) : null, reservedAt: now(), attempts: 0 };
       cache.delete(state.businessId);
     },
     settle(state, entry, success) {
@@ -47,7 +47,7 @@ export function createFlexpriceBilling({ store, provider = createFlexpriceProvid
       if (!success) { event.status = 'not_billed'; event.completedAt = now(); entry.flexpriceStatus = 'not_billed_refunded'; return; }
       const config = provider.binding(state.businessId);
       event.status = 'queued'; event.queuedAt = now();
-      event.payload = { event_id: event.id, event_name: 'gtm_credits_consumed', customer_id: state.flexprice.lastWallet.customerId, external_customer_id: state.flexprice.lastWallet.externalCustomerId, timestamp: event.queuedAt, source: 'gtm_portal', properties: { credits: event.creditUnits, units: '1', operation: event.operation, operation_kind: entry.kind, business_key: state.businessId, delivery_mode: entry.kind === 'outreach' ? 'dry_run' : 'research', ...(event.leadKey ? { lead_key: event.leadKey } : {}) } };
+      event.payload = { event_id: event.id, event_name: 'gtm_credits_consumed', customer_id: state.flexprice.lastWallet.customerId, external_customer_id: state.flexprice.lastWallet.externalCustomerId, timestamp: event.queuedAt, source: 'gtm_portal', properties: { credits: event.creditUnits, units: '1', operation: event.operation, operation_kind: entry.kind, business_key: state.businessId, delivery_mode: entry.kind === 'outreach' ? entry.mode === 'live' ? 'live' : 'dry_run' : 'research', ...(event.leadKey ? { lead_key: event.leadKey } : {}) } };
       entry.flexpriceStatus = 'flexprice_queued';
       if (config.hash !== event.bindingHash) event.error = 'Project binding changed. Resolve this event at its original destination.';
     },
@@ -58,7 +58,7 @@ export function createFlexpriceBilling({ store, provider = createFlexpriceProvid
     // Existing handlers validate the full request hash before returning a saved
     // result. Let a replay reach that check without authorizing another charge.
     const leadId = path.match(/^\/leads\/([^/]+)\//)?.[1];
-    const runs = path === '/competitor-research' ? state.competitorResearch : path === '/source-intakes' ? state.sourceIntakes : path === '/prospect-searches' ? state.prospectSearches : /\/people-research$/.test(path) ? state.peopleResearch : /\/(?:company\/lookup|contacts\/(?:search|verify))$/.test(path) ? state.enrichmentRuns : path === '/assistant/intake' || /\/drafts$/.test(path) ? state.assistantRuns : /\/signal-checks$/.test(path) ? state.leads.find(lead => lead.id === leadId)?.signalMonitor?.runs : [];
+    const runs = path === '/competitor-research' ? state.competitorResearch : path === '/source-intakes' ? state.sourceIntakes : path === '/prospect-searches' ? state.prospectSearches : /\/people-research$/.test(path) ? state.peopleResearch : /\/education-research$/.test(path) ? state.educationResearch : /\/(?:company\/lookup|contacts\/(?:search|verify))$/.test(path) ? state.enrichmentRuns : path === '/assistant/intake' || /\/drafts$/.test(path) ? state.assistantRuns : /\/signal-checks$/.test(path) ? state.leads.find(lead => lead.id === leadId)?.signalMonitor?.runs : [];
     if (requestId && (runs || []).some(run => run.id === requestId && (!run.leadId || run.leadId === leadId))) return;
     const draftId = path.match(/^\/drafts\/([^/]+)\/simulate$/)?.[1];
     if (draftId && state.drafts.some(draft => draft.id === draftId && ['simulated', 'accepted'].includes(draft.status))) return;

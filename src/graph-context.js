@@ -10,7 +10,7 @@ export function graphContextKey(state, competitors = state.competitors || [], cl
   const fields = ['id', 'domain', 'name', 'industry', 'location', 'source', 'contactSource', 'facts', 'sourceIntakeId', 'evidenceNeedsReview', 'evidenceStatus', 'excludedReason', 'companyProfile', 'signal', 'marketSignals', 'people'];
   return JSON.stringify({ businessId: state.businessId, approved: state.approved, company: state.company, products: state.productFamilies, icp: state.icp, capabilities: state.capabilities, commercial: state.commercial, competitors,
     leads: leads.map(lead => ({ ...Object.fromEntries(fields.map(key => [key, lead[key]])), outcomes: (lead.events || []).filter(event => event.recordType === 'outcome') })),
-    sent: drafts.filter(draft => ['accepted','simulated'].includes(draft.status)).map(({id,leadId,status,channel,variant,sequenceStep,sentAt})=>({id,leadId,status,channel,variant,sequenceStep,sentAt})),
+    sent: drafts.filter(draft => ['accepted','simulated'].includes(draft.status)).map(({id,leadId,status,channel,variant,sequenceStep,sentAt,deliveryProvider,deliveryStatus,providerAcceptedAt,deliveryReceiptAt})=>({id,leadId,status,channel,variant,sequenceStep,sentAt,deliveryProvider,deliveryStatus,providerAcceptedAt,deliveryReceiptAt})),
     competitorsReviewed: (state.competitorReviews || []).map(({ comparisonNote, ...review }) => review),
     competitorValidity: (state.competitorReviews || []).map(review => [review.id, competitorReviewCurrent(review, state, clock)]),
     buyingLinks: (state.buyingLinks || []).map(({ profileKey, accountKey, ...link }) => link),

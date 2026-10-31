@@ -17,7 +17,7 @@ const service = createService({ store, graph });
 const signalScheduler = createSignalScheduler(service);
 const billingScheduler = createFlexpriceScheduler(service);
 const app = createApp({ service, store, accessToken: process.env.PROJECT_ACCESS_TOKEN || '', ...(process.env.PUBLIC_ORIGIN ? { allowedOrigins: [process.env.PUBLIC_ORIGIN] } : {}) });
-const server = app.listen(Number(process.env.PORT || 3001), host, () => console.log(`GTM portal: http://${host}:${server.address().port} | Demo mode: no external delivery`));
+const server = app.listen(Number(process.env.PORT || 3001), host, () => console.log(`GTM portal: http://${host}:${server.address().port} | Project email: ${service.deliveryStatus().configured ? 'configured; sender confirmation and exact live approval required' : 'disabled'}`));
 let stopping = false;
 async function stop() { if (stopping) return; stopping = true; server.close(); await signalScheduler.stop(); await billingScheduler.stop(); await graph.close(); store.close(); process.exit(0); }
 process.on('SIGINT', stop); process.on('SIGTERM', stop);

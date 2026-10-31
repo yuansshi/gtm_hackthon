@@ -14,7 +14,7 @@ export const publicDraft = d => ({ ...d, approvedHash: d.approvedHash || null })
 
 export function initialRuntime(id) {
   return {
-    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], communicationRestrictions: [], communicationOperations: [], companyReviews: [], companyRestrictions: [], buyingLinks: [], buyingOperations: [], competitorResearch: [], competitorReviews: [], competitorOperations: [], peopleResearch: [], educationResearch: [], educationReviews: [], educationOperations: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {},
+    ...initialBusinessState(id), leads: [], drafts: [], sourceReviews: [], sourceIntakes: [], customCandidates: [], prospectSearches: [], enrichmentRuns: [], contactReviews: [], contactSuppressions: [], communicationRestrictions: [], communicationOperations: [], companyReviews: [], companyRestrictions: [], buyingLinks: [], buyingOperations: [], competitorResearch: [], competitorReviews: [], competitorOperations: [], peopleResearch: [], educationResearch: [], educationReviews: [], educationOperations: [], personReviews: [], personOperations: [], knownConnections: [], jobs: [], assistantRuns: [], assistantFieldProvenance: {}, delivery: { checks: [], attempts: [] },
     wallet: { credits: 100, initialCredits: 100, currency: 'demo credits', ledger: [] },
     version: 2, revision: 0, serverPersisted: true,
   };
@@ -28,8 +28,11 @@ export function addActivity(state, title, detail, actor = 'You', metadata = {}) 
 
 export function recoverInterruptedWork(store) {
   for (const id of businesses.map(business => business.id)) {
-    for (const entry of store.read(id).wallet.ledger.filter(entry => entry.status === 'reserved')) store.settle(id, entry.id, false);
+    const pendingDelivery = new Set((store.read(id).delivery?.attempts || []).filter(item => ['sending', 'unknown'].includes(item.status)).map(item => item.reservation));
+    for (const entry of store.read(id).wallet.ledger.filter(entry => entry.status === 'reserved' && !pendingDelivery.has(entry.id))) store.settle(id, entry.id, false);
     store.mutate(id, state => {
+      for (const attempt of state.delivery?.attempts || []) if (attempt.status === 'sending') { attempt.status = 'unknown'; attempt.error = 'Server restarted during transmission. Acceptance is unknown; no automatic resend or refund. Await signed receipts and inspect provider records.'; const draft = state.drafts.find(item => item.id === attempt.draftId); if (draft) draft.status = 'delivery_unknown'; const entry = state.wallet.ledger.find(item => item.id === attempt.reservation); if (entry) entry.externalStatus = 'provider_unknown'; }
+      for (const check of state.delivery?.checks || []) if (check.status === 'running') { check.status = 'failed'; check.error = 'Sender check interrupted. Check it again before live approval.'; check.completedAt = now(); }
       for (const job of state.jobs.filter(job => job.status === 'running')) { job.status = 'failed'; job.error = 'Server restarted; reserved credits refunded. Start a new research request.'; job.completedAt = now(); }
       for (const intake of state.sourceIntakes || []) if (intake.status === 'running') { intake.status = 'failed'; intake.error = 'Server restarted; reserved credits refunded. Start a new source request.'; intake.errorCode = 'interrupted_request'; intake.completedAt = now(); }
       for (const run of state.competitorResearch || []) if (run.status === 'running') { run.status = 'failed'; run.error = 'Server restarted; reserved credits refunded. Competitor research is not replayed.'; run.errorCode = 'interrupted_request'; run.completedAt = now(); }
@@ -62,10 +65,10 @@ export function createStore(directory) {
       db.exec('COMMIT'); return { state, result };
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   };
-  const reserve = (id, kind, credits, leadId) => mutate(id, state => {
+  const reserve = (id, kind, credits, leadId, options = {}) => mutate(id, state => {
     if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid metering amount');
     if (state.wallet.credits < credits) throw new AppError(402, `This action needs ${credits} credits; ${state.wallet.credits} remain.`, 'insufficient_credits');
-    const entry = { id: randomUUID(), kind, credits, leadId, status: 'reserved', at: now(), externalStatus: 'not_connected' };
+    const entry = { id: randomUUID(), kind, credits, leadId, status: 'reserved', at: now(), externalStatus: 'not_connected', ...(options.mode ? { mode: options.mode, dispatchId: options.dispatchId } : {}) };
     meteringPolicy?.reserve(state, entry);
     state.wallet.credits -= credits; state.wallet.ledger.unshift(entry); return entry.id;
   }).result;

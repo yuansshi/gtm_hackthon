@@ -21,7 +21,9 @@ export default function WorkspaceOverview({ business, state, go, exportBrief }) 
         : !shortlisted.length
           ? { title: 'Choose your first account', text: 'Inspect the research and fit rationale, then add relevant accounts to your shortlist.', action: 'Review accounts', view: 'discovery', icon: Users }
           : approved.length
-            ? { title: 'Approved messages are ready for a dry run', text: 'Review the approved version in outreach before recording a local demo result.', action: 'Open approved messages', view: 'outreach', icon: ShieldCheck }
+            ? { title: approved.some(draft => draft.approvedDeliveryMode === 'live') ? 'Approved email awaits your send decision' : 'Approved messages are ready for a dry run', text: 'Open the exact approved version and confirm its selected delivery mode before continuing.', action: 'Open approved messages', view: 'outreach', icon: ShieldCheck }
+            : drafts.some(draft => draft.status === 'accepted')
+              ? { title: 'Inspect provider receipts and opportunity context', text: 'Provider acceptance is recorded separately from delivery and replies. Review signed receipts in outreach and confirmed outcomes in the pipeline.', action: 'Review delivery receipts', view: 'outreach', icon: ShieldCheck }
             : drafts.some(draft => draft.status === 'simulated')
               ? { title: 'Keep the opportunity context current', text: 'Your demo outreach is recorded. Track subsequent, user-reported sales milestones in the pipeline.', action: 'Open pipeline', view: 'pipeline', icon: Target }
               : { title: 'Prepare a relevant introduction', text: 'Your shortlisted accounts carry their application context and public sources into the draft.', action: 'Prepare outreach', view: 'outreach', icon: BookOpen };
@@ -32,7 +34,7 @@ export default function WorkspaceOverview({ business, state, go, exportBrief }) 
     { label: 'Needs human review', count: pending.length, detail: 'Exact-message decisions', click: () => go('outreach'), review: true },
     { label: 'Pipeline progress', count: contacted.length, detail: 'Accounts beyond matching', click: () => go('pipeline') },
   ];
-  const steps = [state.approved, leads.length > 0, leads.length > 0, drafts.some(draft => ['approved', 'simulated'].includes(draft.status)), leads.some(lead => lead.events?.some(event => event.mode === 'dry_run' || event.mode === 'user_reported'))];
+  const steps = [state.approved, leads.length > 0, leads.length > 0, drafts.some(draft => ['approved', 'simulated', 'accepted'].includes(draft.status)), leads.some(lead => lead.events?.some(event => event.mode === 'dry_run' || event.mode === 'user_reported' || event.mode === 'live'))];
 
   return <div className="workspace-overview">
     <div className="page-heading"><div><h1>{business.name}</h1><p>{business.tagline}. {state.icp.regions ? `Campaign territory: ${state.icp.regions}.` : 'Choose a campaign territory to begin.'}</p></div><div className="heading-actions"><button className="button secondary" onClick={exportBrief}>Export brief</button><button className="button primary" onClick={() => go(next.view)}>{next.action}<ArrowRight size={15} /></button></div></div>
