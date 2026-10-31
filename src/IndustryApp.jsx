@@ -1,3 +1,4 @@
+import { canImportLegacyProfile } from './workspace-hydration.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { Activity, Check, ChevronDown, ChevronRight, CircleCheck, CircleHelp, Compass, GitBranch, LayoutDashboard, Link2, Menu, Network, RotateCcw, ShieldCheck, Target, X, BarChart3, Wallet, Search } from 'lucide-react';
 import ModuleOne from './ModuleOne';
@@ -64,20 +65,20 @@ export default function IndustryApp() {
   const loadServer = async id => {
     setConnected(false); setConnectionError('');
     try {
-      let next = await api(`/businesses/${id}`);
       const cached = loadBusiness(id);
       let saved = false; try { saved = !!localStorage.getItem(businessStorageKey(id)); } catch {}
-      if (!next.profileImported && saved) next = await api(`/businesses/${id}/profile`, 'PUT', { profile: profileOf(cached), revision: next.revision });
+      let next = await api(`/businesses/${id}`);
+      if (canImportLegacyProfile(next, saved)) next = await api(`/businesses/${id}/profile`, 'PUT', { profile: profileOf(cached), revision: next.revision });
       if (activeBusiness.current === id) { setState(next); setDirty(false); setConnected(true); }
     } catch (e) { if (activeBusiness.current === id) setConnectionError(e.message); }
   };
   useEffect(() => { loadServer(state.businessId); }, [state.businessId]);
   useEffect(() => {
-    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running') || state.flexprice?.pendingCount > 0)) return;
+    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running') || state.flexprice?.pendingCount > 0 || state.band?.enabled)) return;
     const id = state.businessId; const timer = setInterval(async () => {
       try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(current => current.businessId === id && next.revision >= current.revision ? next : current); } catch (e) { if (activeBusiness.current === id) setConnectionError(e.message); }
     }, 1500); return () => clearInterval(timer);
-  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns, state.flexprice]);
+  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns, state.flexprice, state.band?.enabled]);
   useEffect(() => {
     if (!connected || dirty || !(view === 'graph' || ['outreach', 'overview', 'pipeline'].includes(view) && (state.delivery?.configured || state.delivery?.attempts?.length))) return;
     const id = state.businessId;

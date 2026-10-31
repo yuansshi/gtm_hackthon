@@ -15,7 +15,7 @@ npm start
 
 Open **http://127.0.0.1:3001**. The Express server serves both the API and production UI. For UI development, run `npm run server` and `npm run dev` in two terminals; Vite proxies `/api` to port 3001. `npm run preview` also requires the backend.
 
-The supplied `.env.example` contains dummy Band and Flexprice placeholders. Band remains a local demo. Flexprice is disabled by default; an optional project-only adapter requires per-business identity and rate-contract confirmation before metering. Key presence alone never verifies a connection. AI, Tavily prospect search, Hunter contact research and optional SendGrid delivery are disabled by default. Do not put personal keys here.
+The supplied `.env.example` contains dummy Band and Flexprice placeholders. Band is disabled by default. Optional project agents require four dedicated identities, separate reviewed business rooms and explicit packet approval; see [Band integration](docs/band-integration.md). Flexprice is disabled by default; an optional project-only adapter requires per-business identity and rate-contract confirmation before metering. Key presence alone never verifies a connection. AI, Tavily prospect search, Hunter contact research and optional SendGrid delivery are disabled by default. Do not put personal keys here.
 
 ## Try the five-module flow
 
@@ -42,7 +42,7 @@ New desktop outreach drafts save a [message brief](docs/message-brief.md): audie
 | ICP confidence | Visible 0–1 coverage plus provenance for reviewed local/model suggestions; not calibrated probabilities |
 | Drafting | Source-grounded templates by default; optional credential-gated OpenAI structured drafts with required account/supplier citations, proposed claim review, and actual returned token usage |
 | Outreach | Server-enforced dry/live approval; optional project SendGrid sender/suppression checks, one POST, signed receipts and opt-out handling; mock-tested, main disabled and live project delivery unverified; LinkedIn draft/dry-run only |
-| Agents / Band | Local role-based steps; no independently running Band agents, @mentions, tokens, or cost telemetry |
+| Agents / Band | Optional project-only four-identity room handoffs, exact public-packet review, template/model Builder, bounded Reviewer/Security checks and returned-token/portal-credit telemetry; HTTP/socket fixtures tested, main disabled and live Band unverified; discovery role summaries remain local |
 | Billing / Flexprice | Local demo reloads plus optional project wallet verification, metered usage outbox, reconciliation and external credit gates; fixtures checked, live project unverified; no payment collected |
 | Security scans | npm audit and GitHub verification pass; owner-disabled Snyk jobs are skipped, with no real SAST/SCA result |
 
@@ -81,6 +81,7 @@ The GitHub workflow runs verification checks. Its Snyk source/dependency jobs ar
 - `src/PipelineAnalytics.jsx`, `src/pipeline-metrics.js`: shared cohort calculations, event-mode/window filters, post-contact conversion, and explicit reply linkage.
 - `server/app.js`: typed HTTP boundary, sessions, origin/CSRF controls.
 - `server/service.js`: workflow policy, exact-message approval, metering, history metrics.
+- `server/band-provider.js`, `server/band-coordination.js`, `src/BandTeam.jsx`: optional project agent identities/rooms, exclusive authenticated sockets, durable mention handoffs, explicit packet consent, bounded checks and human-review return.
 - `src/EmailDelivery.jsx`, `server/email-delivery.js`, `server/sendgrid-provider.js`: optional project sender confirmation, exact live preview, durable one-attempt submission, signed receipts and provider restrictions.
 - `server/store.js`, `server/graph.js`: transactional workspace store and native graph projection.
 - `src/Billing.jsx`, `server/billing.js`: credit balances, pack/custom reloads, receipts, usage history, limits and retry-safe reload IDs.
@@ -233,3 +234,5 @@ Communication preferences: use **HITL review → Communication preferences** or 
 Current validation: **244 tests pass**, including 12 communication-control tests and 16 education tests; production build passes.
 
 Shared education: open **Accounts → Contacts → reviewed person → Education evidence**. Fetch the company biography and institution identity page for two public-person-research credits, review exact passages, then query the graph for a possible introduction through a shared institution and an attested connection. Native Institution records, directional studied_at edges and both people’s citations are inspectable. Source/identity mismatch, expiry, withdrawal and attestation changes remove support; no message is approved or sent. Current validation: **244 tests pass**, including 16 education tests; production build passes. See [evidence rules and validation](docs/education-introductions.md).
+
+Optional [Band project agents](docs/band-integration.md) prepare a cited source template or separately authorized model draft, then hand it through Reviewer/Security checks and back to the Planner. The resulting draft remains unapproved. Room and packet review are separate from message approval. Project keys remain disabled in the main setup; mocked routing and token responses do not establish live integration success or bonuses.

@@ -10,6 +10,8 @@ import { companyHoldReasons, draftCompanyEvidenceCurrent } from './company-evide
 
 const MessageBriefControls = lazy(() => import('./MessageBrief.jsx').then(module => ({ default: module.MessageBriefControls })));
 const MessageBriefReview = lazy(() => import('./MessageBrief.jsx').then(module => ({ default: module.MessageBriefReview })));
+const BandTeam = lazy(() => import('./BandTeam.jsx'));
+const BandPacket = lazy(() => import('./BandTeam.jsx').then(module => ({ default: module.BandPacket })));
 const CommunicationControls = lazy(() => import('./CommunicationControls.jsx'));
 const EmailDelivery = lazy(() => import('./EmailDelivery.jsx'));
 const LiveEmailDetails = lazy(() => import('./EmailDelivery.jsx').then(module => ({ default: module.LiveEmailDetails })));
@@ -53,6 +55,9 @@ export function Outreach({ state, act, busy, go }) {
   const [activeId, setActiveId] = useState(() => firstDraft(drafts));
   const [generation, setGeneration] = useState('template');
   const [modelAck, setModelAck] = useState(false);
+  const [bandPlan, setBandPlan] = useState(null), [bandAck, setBandAck] = useState(false);
+  const usesBand = generation.startsWith('band_'), usesModel = generation === 'model' || generation === 'band_model';
+  const bandRunning = state.band?.runs?.some(run => ['planning','waiting_builder','building','waiting_reviewer','reviewing','waiting_security','security_review','waiting_planner'].includes(run.status));
   const [messageBrief, setMessageBrief] = useState({ ...defaultMessageBrief });
   const [editing, setEditing] = useState(null);
   const [ack, setAck] = useState(false);
@@ -80,6 +85,7 @@ export function Outreach({ state, act, busy, go }) {
   const queue = [...drafts].sort((a, b) => Number(needsReview(b)) - Number(needsReview(a)));
   useEffect(() => { setAck(false); setSendAck(false); setDeliveryMode(current?.approvedDeliveryMode || 'dry_run'); }, [current?.id, current?.version, current?.status, current?.approvedDeliveryMode, state.approvedProfileHash]);
 
+  useEffect(() => { setModelAck(false); generationRequest.current = null; }, [leadId, channel, variant, sequenceStep, messageBrief, state.approvedProfileHash]);
   useEffect(() => { if (!leads.some(lead => lead.id === leadId)) setLeadId(leads[0]?.id || ''); }, [leads, leadId]);
   useEffect(() => {
     if (!drafts.some(draft => draft.id === activeId)) { setActiveId(firstDraft(drafts)); setEditing(null); setAck(false); }
@@ -87,10 +93,10 @@ export function Outreach({ state, act, busy, go }) {
 
   const activate = id => { setActiveId(id); setEditing(null); setAck(false); };
   const prepareDraft = async () => {
-    const key = JSON.stringify({ leadId, channel, variant, sequenceStep, messageBrief, profile: profileOf(state) });
+    const key = JSON.stringify({ leadId, channel, variant, sequenceStep, messageBrief, generation, preview: usesBand ? bandPlan?.previewHash : null, profile: profileOf(state) });
     if (generationRequest.current?.key !== key) generationRequest.current = { key, id: crypto.randomUUID() };
-    const result = await act(`/leads/${leadId}/drafts`, { channel, variant, sequenceStep, generation, messageBrief, ...(generation === 'model' ? { requestId: generationRequest.current.id, acknowledgedExternalProcessing: modelAck, revision: state.revision } : {}) });
-    if (result) activate(result.activeDraftId);
+    const result = usesBand ? await act('/band/runs', { leadId, channel, variant, sequenceStep, generation: usesModel ? 'model' : 'template', messageBrief, requestId: generationRequest.current.id, revision: Math.max(state.revision, bandPlan.revision), previewHash: bandPlan.previewHash, acknowledged: bandAck, acknowledgedModelProcessing: modelAck }) : await act(`/leads/${leadId}/drafts`, { channel, variant, sequenceStep, generation, messageBrief, ...(usesModel ? { requestId: generationRequest.current.id, acknowledgedExternalProcessing: modelAck, revision: state.revision } : {}) });
+    if (result?.activeDraftId) activate(result.activeDraftId); if (result && usesBand) { setBandAck(false); setModelAck(false); generationRequest.current = null; }
   };
   const edit = key => event => {
     setAck(false);
@@ -126,12 +132,14 @@ export function Outreach({ state, act, busy, go }) {
     <ReviewFlow current={current} editing={editing} state={state} deliveryMode={live ? 'live' : 'dry_run'} />
     <Suspense fallback={<p>Loading communication preferences…</p>}><CommunicationControls state={state} act={act} busy={busy} /></Suspense>
     <Suspense fallback={<p>Loading project email…</p>}><EmailDelivery state={state} act={act} busy={busy}/></Suspense>
+    <Suspense fallback={<p>Loading project agents…</p>}><BandTeam state={state} act={act} busy={busy} onReviewDraft={id => { activate(id); decisionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }}/></Suspense>
 
     {!leads.length ? drafts.length ? <div className="hitl-prepare-note"><FileText size={16} /><span>Shortlist an account to prepare another draft. Existing messages remain available for review.</span><button className="text-button" onClick={() => go('discovery')}>Open discovery<ArrowRight size={14} /></button></div> : <section className="panel workflow-empty"><Mail size={28} /><h2>Prepare the first message for review</h2><p>Shortlist an account in discovery, then prepare a source-grounded draft. Human approval comes next.</p><button className="button primary" onClick={() => go('discovery')}>Open discovery<ArrowRight size={15} /></button></section> : <details className="panel hitl-composer" open={drafts.length === 0 ? true : undefined}>
       <summary><Mail size={17} /><strong>Prepare a {drafts.length ? 'new' : 'source-grounded'} draft</strong><span>Every new version requires human review</span></summary>
-      <div className="compose-controls"><label>Shortlisted account<select value={leadId} onChange={event => setLeadId(event.target.value)}>{leads.map(lead => <option key={lead.id} value={lead.id}>{lead.name}</option>)}</select></label><label>Channel<select value={channel} onChange={event => setChannel(event.target.value)}><option value="email">Email</option><option value="linkedin">LinkedIn</option></select></label><label>Variant<select value={variant} onChange={event => setVariant(event.target.value)}><option>A</option><option>B</option></select></label><label>Sequence<select value={sequenceStep} onChange={event => setSequenceStep(Number(event.target.value))}><option value={0}>Introduction / day 0</option><option value={1}>Follow-up / day 3</option><option value={2}>Follow-up / day 7</option></select></label><label>Draft method<select value={generation} onChange={event => { setGeneration(event.target.value); setModelAck(false); generationRequest.current = null; }}><option value="template">Source template · free</option><option value="model" disabled={!state.assistant?.configured}>AI model · 2 credits</option></select></label><button className="button primary" disabled={busy || !!editing || !state.approved || !leadId || !!leads.find(lead=>lead.id===leadId)?.communicationStatus?.[channel]?.blocked || (generation === 'model' && !modelAck)} onClick={prepareDraft}><Mail size={15} />Prepare draft</button></div>
+      <div className="compose-controls"><label>Shortlisted account<select value={leadId} onChange={event => setLeadId(event.target.value)}>{leads.map(lead => <option key={lead.id} value={lead.id}>{lead.name}</option>)}</select></label><label>Channel<select value={channel} onChange={event => setChannel(event.target.value)}><option value="email">Email</option><option value="linkedin">LinkedIn</option></select></label><label>Variant<select value={variant} onChange={event => setVariant(event.target.value)}><option>A</option><option>B</option></select></label><label>Sequence<select value={sequenceStep} onChange={event => setSequenceStep(Number(event.target.value))}><option value={0}>Introduction / day 0</option><option value={1}>Follow-up / day 3</option><option value={2}>Follow-up / day 7</option></select></label><label>Draft method<select value={generation} onChange={event => { setGeneration(event.target.value); setModelAck(false); generationRequest.current = null; }}><option value="template">Source template · free</option><option value="model" disabled={!state.assistant?.configured}>AI model · 2 credits</option><option value="band_template" disabled={!state.band?.connected || state.band?.requiresInvestigation}>Band team · source template</option><option value="band_model" disabled={!state.band?.connected || state.band?.requiresInvestigation || !state.assistant?.configured}>Band team · AI model · 2 credits</option></select></label><button className="button primary" disabled={busy || !!editing || !state.approved || !leadId || !!leads.find(lead=>lead.id===leadId)?.communicationStatus?.[channel]?.blocked || (usesModel && !modelAck) || (usesBand && (!bandPlan || !bandAck || !state.band?.connected || state.band?.requiresInvestigation || bandRunning))} onClick={prepareDraft}><Mail size={15} />Prepare draft</button></div>
       <Suspense fallback={<p>Loading message brief…</p>}><MessageBriefControls value={messageBrief} disabled={busy || !!editing} onChange={brief => { setMessageBrief(brief); setModelAck(false); generationRequest.current = null; }}/></Suspense>
-      {generation === 'model' && <label className="assistant-consent draft-model-consent"><input type="checkbox" checked={modelAck} onChange={event => setModelAck(event.target.checked)} />Send this business’s supplier brief and this account’s public evidence to the configured OpenAI project model. A generated draft still requires exact-message approval.</label>}
+      {usesBand && <Suspense fallback={<p>Loading public Band packet…</p>}><BandPacket state={state} options={{ leadId, channel, variant, sequenceStep, generation: usesModel ? 'model' : 'template', messageBrief }} onPlan={setBandPlan} acknowledged={bandAck} onAcknowledge={setBandAck}/></Suspense>}
+      {usesModel && <label className="assistant-consent draft-model-consent"><input type="checkbox" checked={modelAck} onChange={event => setModelAck(event.target.checked)} />Send this business’s supplier brief and this account’s public evidence to the configured OpenAI project model. A generated draft still requires exact-message approval.</label>}
     </details>}
 
     {!!drafts.length && <div className="outreach-layout hitl-review-layout">
