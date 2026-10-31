@@ -16,6 +16,8 @@ jobs:
       - run: npm run build
       - run: npm audit --audit-level=high
   snyk:
+    # Temporarily disabled by the owner; remove this condition after configuring SNYK_TOKEN.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
