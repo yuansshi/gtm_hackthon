@@ -1,7 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, CheckCircle2, ChartNoAxesCombined, ClipboardCheck, Columns3, Info, List, Search, ShieldCheck, X } from 'lucide-react';
 import './pipeline.css';
-import PipelineAnalytics from './PipelineAnalytics';
+import {managementOf,followupState,matchesFollowup} from './followups.js';
+import './followups.css';
+const PipelineAnalytics=lazy(()=>import('./PipelineAnalytics.jsx'));
+const FollowupManager=lazy(()=>import('./FollowupManager.jsx'));
 import { OutcomeReport, OutcomeHistory } from './OutcomeReport';
 
 // Keep the industrial lifecycle aligned with the existing stage PATCH contract.
@@ -37,18 +40,27 @@ export function Pipeline({ state, act, busy }) {
   const [stageFilter, setStageFilter] = useState('');
   const [industry, setIndustry] = useState('');
   const [tier, setTier] = useState('');
+  const [followupLead,setFollowupLead]=useState(null);
+  const [followupSaved,setFollowupSaved]=useState(false);
+  const [ownerFilter,setOwnerFilter]=useState('all');
+  const [taskFilter,setTaskFilter]=useState('all');
+  const [clock,setClock]=useState(Date.now);
+  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),60000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{if(followupLead&&!(state.leads||[]).some(lead=>lead.id===followupLead))setFollowupLead(null);},[state.leads,followupLead]);
   const [analyticsDays, setAnalyticsDays] = useState(0);
   const [analyticsMode, setAnalyticsMode] = useState('all');
   const columns = useRef([]);
   const leads = state.leads || [];
   const metrics = state.metrics || {};
+  const owners=[...new Set(leads.map(lead=>managementOf(lead).ownerName).filter(Boolean))].sort();
   const query = search.trim().toLowerCase();
-  const accounts = leads.filter(lead => inScope(lead, scope)
+  const baseAccounts = leads.filter(lead => inScope(lead, scope)
     && (!stageFilter || lead.stage === stageFilter)
     && (!industry || (lead.industry || 'Unknown industry') === industry)
     && (!tier || (lead.fit?.tier || 'Unrated') === tier)
-    && (!query || [lead.name, lead.domain, lead.industry, lead.application, lead.owner, lead.fit?.tier].filter(Boolean).join(' ').toLowerCase().includes(query)));
-  const hasFilters = Boolean(query || stageFilter || industry || tier || scope !== 'all');
+    && (!query || [lead.name, lead.domain, lead.industry, lead.application, managementOf(lead).ownerName, lead.fit?.tier].filter(Boolean).join(' ').toLowerCase().includes(query)));
+  const accounts=baseAccounts.filter(lead=>matchesFollowup(lead,ownerFilter,taskFilter,clock));
+  const hasFilters = Boolean(query || stageFilter || industry || tier || scope !== 'all' || ownerFilter!=='all' || taskFilter!=='all');
   const reached = stage => leads.filter(lead => lead.events?.some(event => event.stage === stage)).length;
   const operationalMetrics = [
     ['Dry-run messages', metrics.simulated ?? (state.drafts || []).filter(draft => draft.status === 'simulated').length, 'Local simulations'],
@@ -62,14 +74,17 @@ export function Pipeline({ state, act, busy }) {
     ['selected', 'Selected accounts', leads.filter(lead => inScope(lead, 'selected')).length, 'Chosen for qualification'],
     ['won', 'Closed won', leads.filter(lead => inScope(lead, 'won')).length, 'Current recorded stage'],
   ];
-  const clearFilters = () => { setSearch(''); setScope('all'); setStageFilter(''); setIndustry(''); setTier(''); };
+  const clearFilters = () => { setSearch(''); setScope('all'); setStageFilter(''); setIndustry(''); setTier(''); setOwnerFilter('all');setTaskFilter('all'); };
   const chooseStage = stage => {
     setStageFilter(stage);
     if (stage && view === 'board') columns.current[stages.indexOf(stage)]?.scrollIntoView({ block: 'nearest', inline: 'start' });
   };
 
+  const followupSummary=lead=>{const management=managementOf(lead),status=followupState(lead,clock);return <div className="followup-summary"><strong>{management.ownerName||'Unassigned'}</strong><span title={management.nextAction?.text}>{management.nextAction?.text||'No next action'}</span>{management.nextAction&&<small className={status}>{status==='completed'?'Completed':status==='overdue'?'Overdue':'Open'} · {management.nextAction.dueAt?formatDate(management.nextAction.dueAt):'No due date'}</small>}<button type="button" className="followup-edit" disabled={busy} aria-label={`Manage follow-up for ${lead.name}`} onClick={()=>setFollowupLead(lead.id)}>Manage follow-up</button></div>;};
   return <div className="op-pipeline">
     <header className="op-page-header"><div><span className="op-eyebrow">Revenue workspace</span><h1>Opportunity pipeline</h1><p>Move industrial accounts from first match to qualified opportunity.</p></div><div className="op-header-actions"><span className="op-recorded-badge"><ShieldCheck size={14} aria-hidden="true" />User-reported stages</span><button className="button primary" disabled={busy || !leads.length} onClick={() => setReportLead(accounts[0]?.id || leads[0]?.id)}><ClipboardCheck size={15} />Record outcome</button></div></header>
+    {state.signalFixture&&<p className="op-ownership-note">Test fixture only · synthetic research evidence. No external message is sent.</p>}
+    {followupSaved&&<div className="outcome-receipt" role="status"><CheckCircle2 size={17}/><span>Follow-up saved. No credits charged.</span><button type="button" aria-label="Dismiss follow-up receipt" onClick={()=>setFollowupSaved(false)}><X size={15}/></button></div>}
     {outcomeReceipt && <div className={`outcome-receipt ${outcomeReceipt.outcomeProjection !== 'synced' ? 'pending' : ''}`} role="status">{outcomeReceipt.outcomeProjection === 'synced' ? <CheckCircle2 size={17} /> : <Info size={17} />}<span>{outcomeReceipt.outcomeProjection === 'synced' ? 'Outcome saved and graph updated.' : 'Outcome saved. Graph refresh is pending; retry from outcome history.'} No credits charged.{outcomeReceipt.outcomeDraftsForReview > 0 && ` ${outcomeReceipt.outcomeDraftsForReview} unsent message(s) need a fresh version review.`}</span><button aria-label="Dismiss outcome receipt" onClick={() => setOutcomeReceipt(null)}><X size={15} /></button></div>}
 
     <div className="op-summaries" aria-label="Filter pipeline by account summary">
@@ -87,27 +102,28 @@ export function Pipeline({ state, act, busy }) {
         <label className="op-cohort-filter"><span>Industry</span><select aria-label="Filter pipeline by industry" value={industry} onChange={event => setIndustry(event.target.value)}><option value="">All industries</option>{[...new Set(leads.map(lead => lead.industry || 'Unknown industry'))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
         <label className="op-cohort-filter"><span>Tier</span><select aria-label="Filter pipeline by tier" value={tier} onChange={event => setTier(event.target.value)}><option value="">All tiers</option>{[...new Set(leads.map(lead => lead.fit?.tier || 'Unrated'))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
       </div>
-      <div className="op-result-bar"><div aria-live="polite"><strong>{accounts.length}</strong> of {leads.length} accounts{scope !== 'all' && <span className="op-filter-chip">{scopeLabels[scope]}<button type="button" aria-label={`Clear ${scopeLabels[scope]} filter`} onClick={() => setScope('all')}><X size={12} aria-hidden="true" /></button></span>}{industry && <span className="op-filter-chip">{industry}<button type="button" aria-label="Clear industry filter" onClick={() => setIndustry('')}><X size={12} aria-hidden="true" /></button></span>}{tier && <span className="op-filter-chip">{tier}<button type="button" aria-label="Clear tier filter" onClick={() => setTier('')}><X size={12} aria-hidden="true" /></button></span>}{stageFilter && <span className="op-filter-chip">{stageFilter}<button type="button" aria-label="Clear stage filter" onClick={() => chooseStage('')}><X size={12} aria-hidden="true" /></button></span>}</div>{hasFilters ? <button type="button" className="op-clear" onClick={clearFilters}>Clear account filters</button> : <span className="op-cycle-note">{view === 'board' ? <>Scroll to follow all 10 stages<ArrowRight size={13} aria-hidden="true" /></> : view === 'analytics' ? 'Analytics uses these same account filters' : 'Stage changes include actor and timestamp'}</span>}</div>
+      <div className="op-owner-filters"><label className="op-followup-filter">Sales owner<select aria-label="Filter pipeline by owner" value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}><option value="all">All owners</option><option value="unassigned">Unassigned</option>{owners.map(name=><option value={'name:'+name} key={name}>{name}</option>)}{ownerFilter.startsWith('name:')&&!owners.includes(ownerFilter.slice(5))&&<option value={ownerFilter}>{ownerFilter.slice(5)} · no current accounts</option>}</select></label><label className="op-followup-filter">Next action<select aria-label="Filter pipeline by next action" value={taskFilter} onChange={e=>setTaskFilter(e.target.value)}><option value="all">All next actions</option><option value="open">Open</option><option value="overdue">Overdue</option><option value="completed">Completed</option><option value="none">No next action</option></select></label></div><p className="op-ownership-note">Owners and next actions are recorded assignments. They do not grant access, send outreach or change stages. Due times use your local timezone.</p><div className="op-result-bar"><div aria-live="polite"><strong>{accounts.length}</strong> of {leads.length} accounts{scope !== 'all' && <span className="op-filter-chip">{scopeLabels[scope]}<button type="button" aria-label={`Clear ${scopeLabels[scope]} filter`} onClick={() => setScope('all')}><X size={12} aria-hidden="true" /></button></span>}{industry && <span className="op-filter-chip">{industry}<button type="button" aria-label="Clear industry filter" onClick={() => setIndustry('')}><X size={12} aria-hidden="true" /></button></span>}{tier && <span className="op-filter-chip">{tier}<button type="button" aria-label="Clear tier filter" onClick={() => setTier('')}><X size={12} aria-hidden="true" /></button></span>}{stageFilter && <span className="op-filter-chip">{stageFilter}<button type="button" aria-label="Clear stage filter" onClick={() => chooseStage('')}><X size={12} aria-hidden="true" /></button></span>}</div>{hasFilters ? <button type="button" className="op-clear" onClick={clearFilters}>Clear account filters</button> : <span className="op-cycle-note">{view === 'board' ? <>Scroll to follow all 10 stages<ArrowRight size={13} aria-hidden="true" /></> : view === 'analytics' ? 'Analytics uses these same account filters' : 'Stage changes include actor and timestamp'}</span>}</div>
 
       {view !== 'analytics' && !accounts.length && <div className="op-empty-state"><Search size={20} aria-hidden="true" /><div><strong>{leads.length ? 'No accounts match these filters' : 'Your pipeline is ready for accounts'}</strong><p>{leads.length ? 'Adjust the search, summary, or stage to see more accounts.' : 'Researched accounts will appear here at their recorded stage.'}</p></div>{hasFilters && <button type="button" onClick={clearFilters}>Clear account filters</button>}</div>}
 
-      {view === 'analytics' ? <PipelineAnalytics state={state} accounts={accounts} days={analyticsDays} setDays={setAnalyticsDays} mode={analyticsMode} setMode={setAnalyticsMode} /> : view === 'board' ? <div className="op-board" role="region" aria-label="Opportunity board with ten industrial stages" tabIndex={0}>{stages.map((stage, index) => {
+      {view === 'analytics' ? <Suspense fallback={<p className="op-ownership-note">Loading analytics…</p>}><PipelineAnalytics state={state} accounts={accounts} days={analyticsDays} setDays={setAnalyticsDays} mode={analyticsMode} setMode={setAnalyticsMode} /></Suspense> : view === 'board' ? <div className="op-board" role="region" aria-label="Opportunity board with ten industrial stages" tabIndex={0}>{stages.map((stage, index) => {
         const rows = accounts.filter(lead => lead.stage === stage);
         return <section className={`op-column ${stageFilter === stage ? 'is-filtered' : ''} ${index === 8 ? 'is-won' : ''} ${index === 9 ? 'is-lost' : ''}`} key={stage} ref={element => { columns.current[index] = element; }} aria-label={`${stage}, ${rows.length} accounts`}>
           <button type="button" className="op-column-heading" onClick={() => chooseStage(stageFilter === stage ? '' : stage)} aria-pressed={stageFilter === stage}><span className="op-stage-dot" /><h3>{stage}</h3><span className="op-column-count">{rows.length}</span></button>
           <div className="op-column-body">{rows.map(lead => {
             const event = latestEvent(lead);
-            return <article className="op-card" key={lead.id}><div className="op-card-top"><span className="op-tier">{lead.fit?.tier || 'Not rated'}</span>{lead.selected && <span className="op-selected"><Check size={12} aria-hidden="true" />Selected</span>}</div><h4>{lead.name}</h4><span className="op-industry">{lead.industry || 'Industry not recorded'}</span><p>{lead.application || 'Application not recorded'}</p><div className="op-card-event"><span>{event?.actor || 'Actor not recorded'}<EventMode event={event} /></span><time dateTime={event?.at}>{formatDate(event?.at)}</time></div><label className="op-card-stage"><span>Stage</span><StageSelect lead={lead} act={act} busy={busy} /></label></article>;
+            return <article className="op-card" key={lead.id}><div className="op-card-top"><span className="op-tier">{lead.fit?.tier || 'Not rated'}</span>{lead.selected && <span className="op-selected"><Check size={12} aria-hidden="true" />Selected</span>}</div><h4>{lead.name}</h4><span className="op-industry">{lead.industry || 'Industry not recorded'}</span><p>{lead.application || 'Application not recorded'}</p>{followupSummary(lead)}<div className="op-card-event"><span>{event?.actor || 'Actor not recorded'}<EventMode event={event} /></span><time dateTime={event?.at}>{formatDate(event?.at)}</time></div><label className="op-card-stage"><span>Stage</span><StageSelect lead={lead} act={act} busy={busy} /></label></article>;
           })}{!rows.length && <div className="op-column-empty">No accounts</div>}</div>
         </section>;
-      })}</div> : <div className="op-table-scroll"><table className="op-account-table"><thead><tr><th scope="col">Account</th><th scope="col">Application</th><th scope="col">Tier</th><th scope="col">Current stage</th><th scope="col">Recent actor</th><th scope="col">Last activity</th><th scope="col">Mode</th></tr></thead><tbody>{accounts.map(lead => {
+      })}</div> : <div className="op-table-scroll"><table className="op-account-table"><thead><tr><th scope="col">Account</th><th scope="col">Application</th><th scope="col">Tier</th><th scope="col">Current stage</th><th scope="col">Owner / next action</th><th scope="col">Recent stage actor</th><th scope="col">Last stage activity</th><th scope="col">Mode</th></tr></thead><tbody>{accounts.map(lead => {
         const event = latestEvent(lead);
-        return <tr key={lead.id}><td><div className="op-account-name"><span className="op-account-initial">{lead.name?.charAt(0) || '—'}</span><div><strong>{lead.name}</strong><small>{lead.industry || 'Industry not recorded'}{lead.selected && <span className="op-inline-selected"> · Selected</span>}</small></div></div></td><td className="op-application-cell">{lead.application || 'Not recorded'}</td><td><span className="op-tier">{lead.fit?.tier || 'Not rated'}</span></td><td><StageSelect lead={lead} act={act} busy={busy} /></td><td>{event?.actor || 'Not recorded'}</td><td><time dateTime={event?.at}>{formatDate(event?.at)}</time></td><td><EventMode event={event} /></td></tr>;
-      })}{!accounts.length && <tr><td colSpan={7} className="op-no-data">No accounts to display.</td></tr>}</tbody></table></div>}
+        return <tr key={lead.id}><td><div className="op-account-name"><span className="op-account-initial">{lead.name?.charAt(0) || '—'}</span><div><strong>{lead.name}</strong><small>{lead.industry || 'Industry not recorded'}{lead.selected && <span className="op-inline-selected"> · Selected</span>}</small></div></div></td><td className="op-application-cell">{lead.application || 'Not recorded'}</td><td><span className="op-tier">{lead.fit?.tier || 'Not rated'}</span></td><td><StageSelect lead={lead} act={act} busy={busy} /></td><td>{followupSummary(lead)}</td><td>{event?.actor || 'Not recorded'}</td><td><time dateTime={event?.at}>{formatDate(event?.at)}</time></td><td><EventMode event={event} /></td></tr>;
+      })}{!accounts.length && <tr><td colSpan={8} className="op-no-data">No accounts to display.</td></tr>}</tbody></table></div>}
 
       <footer className="op-data-note"><ShieldCheck size={14} aria-hidden="true" /><span>Stage edits are recorded as user-reported. Dry runs simulate outreach; no external message is sent.</span>{busy && <strong role="status">Saving…</strong>}</footer>
     </section>
 
+    {followupLead&&leads.some(lead=>lead.id===followupLead)&&<Suspense fallback={<p role="status">Loading follow-up…</p>}><FollowupManager key={followupLead} state={state} leadId={followupLead} act={act} busy={busy} saved={()=>setFollowupSaved(true)} close={()=>setFollowupLead(null)}/></Suspense>}
     <OutcomeHistory state={state} act={act} busy={busy} receipt={outcomeReceipt} />
     {reportLead && <OutcomeReport state={state} act={act} busy={busy} initialLeadId={reportLead} close={() => setReportLead(null)} saved={setOutcomeReceipt} />}
   </div>;

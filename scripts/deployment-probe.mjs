@@ -34,6 +34,8 @@ if (phase === 'seed') {
     const state = store.read('allco');
     assert.equal(state.signalFixture,true);assert.equal(state.wallet.credits,123);
     assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');
+    assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');
+    assert.equal(state.leads[0].management.nextAction.text,'Review synthetic supplier requirements');
     const graph = await createGraph(directory);
     try {
       const snapshot = await graph.snapshot('allco');
@@ -42,6 +44,7 @@ if (phase === 'seed') {
       assert.ok(snapshot.edges.some(e=>e.type==='contacted_via'));
       assert.ok(snapshot.edges.some(e=>e.type==='replied_to'));
       assert.ok((await graph.paths('allco')).length>0);
+      assert.ok(!JSON.stringify(snapshot).includes('Synthetic Sales Owner'));
       assert.equal((await graph.snapshot('huasheng')).nodes.length,0);
     } finally {await graph.close();}
   } finally {store.close();}
@@ -91,12 +94,15 @@ if (phase === 'seed') {
     draft=state.drafts[0];assert.equal(draft.status,'simulated');assert.equal(draft.messageBrief.valueProposition,'application_fit');
     state=await json(`/api/businesses/allco/leads/${leadId}/outcomes`,'POST',{requestId:randomUUID(),revision:state.revision,kind:'demo',stage:'Replied',occurredAt:new Date().toISOString(),note:'Synthetic deployment reply; no external outreach or customer response.',draftId:draft.id,respondent:{name:'Synthetic Engineer',source:'https://manufacturer.fixture.test/'},updateStage:true,acknowledged:true});
     assert.equal(state.metrics.replied,1);assert.equal(state.metrics.replyRate,1);assert.equal(state.leads[0].stage,'Replied');
+    state=await json(`/api/businesses/allco/leads/${leadId}/management`,'PATCH',{requestId:randomUUID(),revision:state.revision,expectedVersion:0,ownerName:'Synthetic Sales Owner',nextAction:{text:'Review synthetic supplier requirements',dueAt:new Date(Date.now()+86400000).toISOString(),status:'open'}});
+    assert.equal(state.leads[0].management.version,1);assert.equal(state.wallet.credits,98);assert.equal(state.leads[0].stage,'Replied');
     const reload={packId:'custom',customCredits:25,requestId:randomUUID()};
     state=await json('/api/businesses/allco/billing/reloads','POST',reload);state=await json('/api/businesses/allco/billing/reloads','POST',reload);assert.equal(state.wallet.credits,123);
     assert.equal(state.delivery.attempts.length,0);assert.equal(state.band.runs.length,0);
     console.log('Authenticated intake → native graph → draft → exact HITL → dry run → attributed demo reply and idempotent credit reload passed.');
   } else {
     assert.equal(state.wallet.credits,123);assert.equal(state.drafts.length,1);assert.equal(state.drafts[0].status,'simulated');assert.equal(state.leads[0].stage,'Replied');assert.equal(state.metrics.simulated,1);assert.equal(state.metrics.replied,1);
+    assert.equal(state.leads[0].management.ownerName,'Synthetic Sales Owner');assert.equal(state.leads[0].management.nextAction.status,'open');
     const before=state.wallet.credits;state=await json(`/api/businesses/allco/drafts/${state.drafts[0].id}/simulate`,'POST',{});assert.equal(state.wallet.credits,before);assert.equal(state.metrics.simulated,1);
     console.log('Fresh server sessions read persisted campaign state; replay does not create a second receipt/debit.');
   }

@@ -1,6 +1,6 @@
 # Pipeline analytics
 
-Open **Pipeline → Analytics**. Industry, tier, summary, current-stage, and search filters choose the account cohort shared by Board, List, and Analytics. The analytics activity window and activity type further restrict events and outbound records, not the underlying account population.
+Open **Pipeline → Analytics**. Industry, tier, summary, current-stage, sales-owner, next-action, and search filters choose the account cohort shared by Board, List, and Analytics. The analytics activity window and activity type further restrict events and outbound records, not the underlying account population.
 
 ## Definitions
 
@@ -20,7 +20,7 @@ Time filters use UTC instants with inclusive endpoints. The UI displays those in
 
 Research activity, user-reported stage edits, dry runs, and live provider events retain their recorded types. Selecting Dry runs does not include manual replies. Selecting User-reported does not silently treat a previous simulated contact as a manual contact. All recorded activity can combine those records, and an inline note identifies included simulations.
 
-The current-stage filter can select accounts by outcome. Rates then describe that selected cohort rather than the full campaign. Milestones need not form a monotonic funnel: a quote, RFQ, or win does not fabricate earlier missing steps. The chart uses separate bars on a common contact-cohort denominator.
+The current-stage filter can select accounts by outcome. Owner and next-action filters similarly select the current operational cohort, not a randomized or stable experiment population. Rates then describe that selected cohort rather than the full campaign. Milestones need not form a monotonic funnel: a quote, RFQ, or win does not fabricate earlier missing steps. The chart uses separate bars on a common contact-cohort denominator.
 
 ## Split-test boundary
 
@@ -40,3 +40,5 @@ Pipeline’s **Record outcome** dialog supports explicit user-reported or demo r
 - Browser verification exercises industry and tier selection, time and activity modes, shared Board/List filters, milestone inspection, empty results, reset, and business switching. The value-proposition pass also fixed outcome-history rendering during the transient profile-only business load; direct Pipeline navigation and Allco/Huasheng switching were rechecked afterward. The production build and full existing test suite remain required before publication.
 
 This adds inspectable operational analytics. CRM/calendar ingestion, provider delivery and reply verification, campaign IDs, mature experiment cohorts, and production user authorization remain separate work.
+
+Owner and next-action controls, free manual save history, UTC due-date storage and shared account filters are documented in [Lead management](lead-management.md). Task completion itself adds no contact/reply/stage event or conversion credit.

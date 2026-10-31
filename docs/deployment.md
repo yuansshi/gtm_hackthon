@@ -53,7 +53,7 @@ The [Container deployment workflow](../.github/workflows/container.yml) runs the
 - The image boots as a non-root user, contains the shared runtime modules and excludes local secrets/data/test drivers.
 - Public-interface startup fails without the project token. Health and static UI assets load; campaign APIs reject unauthenticated calls and approval rejects missing CSRF.
 - A disposable synthetic account supports local intake/review, native Person → Company → Product matching, a saved value-proposition draft, mandatory exact HITL and one dry-run receipt.
-- A linked demo reply updates the native graph and dashboard; same-ID credit reloads and dry-run replay cannot charge twice. Huasheng remains separate.
-- After clean shutdown and container removal, a separate native graph reader finds the persisted nodes/relationships/paths without reconstructing them from SQLite. A recreated container then reads the same balance, receipt and pipeline state using a fresh session.
+- A linked demo reply updates the native graph and dashboard; a free recorded owner/manual task is persisted separately from evidence. Same-ID credit reloads and dry-run replay cannot charge twice. Huasheng remains separate.
+- After clean shutdown and container removal, a separate native graph reader finds the persisted nodes/relationships/paths without reconstructing them from SQLite. A recreated container then reads the same balance, receipt, owner/task and pipeline state using a fresh session.
 
 The CI container has no published port or outbound network and receives no live project keys. Its generated access token, named volume and synthetic data are disposable and removed by the checker. Test-only seed/probe code is passed on stdin, not shipped in the runtime image or exposed through an API. The existing owner-disabled Snyk workflow is unchanged; this check does not replace SAST/SCA.

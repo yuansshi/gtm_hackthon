@@ -1,4 +1,5 @@
 import { messageBriefSchema } from './message-brief.js';
+import {managementSchema} from './lead-management.js';
 import express from 'express';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -82,6 +83,7 @@ export function createApp({ service, store, accessToken = '', secureCookies = fa
   });
   const view = (req, res) => res.json(service.snapshot(req.params.business));
   app.get(base, view);
+  app.patch(base + '/leads/:lead/management',(req,res)=>res.json(service.manageLead(req.params.business,req.params.lead,parse(managementSchema,req.body))));
   const bandDraftSchema = z.object({ leadId: z.string().min(1).max(200), channel: z.enum(['email','linkedin']), variant: z.enum(['A','B']), sequenceStep: z.number().int().min(0).max(2), generation: z.enum(['template','model']), messageBrief: messageBriefSchema }).strict();
   app.get(base + '/band/plan', (req,res) => { const q=parse(z.object({leadId:z.string().max(200),channel:z.string(),variant:z.string(),sequenceStep:z.coerce.number(),generation:z.string(),audience:z.string(),tone:z.string(),maxWords:z.coerce.number(),cta:z.string(),valueProposition:z.string().optional()}).strict(),req.query); const input=parse(bandDraftSchema,{leadId:q.leadId,channel:q.channel,variant:q.variant,sequenceStep:q.sequenceStep,generation:q.generation,messageBrief:{audience:q.audience,tone:q.tone,maxWords:q.maxWords,cta:q.cta,...(q.valueProposition?{valueProposition:q.valueProposition}:{})}}); const {context,...plan}=service.planBandDraft(req.params.business,input);res.json(plan); });
   app.post(base + '/band/check',async(req,res)=>res.json(await service.checkBandTeam(req.params.business,parse(z.object({requestId:z.string().uuid(),revision,acknowledged:z.boolean()}).strict(),req.body))));
