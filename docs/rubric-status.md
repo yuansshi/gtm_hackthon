@@ -1,5 +1,7 @@
 # Hackathon coverage and remaining work
 
+Buyer ICPs now include optional job-title and seniority targets, reviewed local/model proposals, provenance and immutable search/selection context. Contact inspection shows literal title/seniority phrase hints and unknowns without asserting rank, current role or buying authority. Criteria remain local during Hunter requests, and main Hunter stays disabled. See [Buyer personas](buyer-personas.md).
+
 Guided intake now proposes the product description and selected business’s technical capability values, with literal unit/qualification preservation, typed scoped review and a mandatory return to Unconfirmed status for applied capability changes. Product evidence coverage and provenance appear in a disclosure. This closes another Module 1 chat/form handoff gap; supplier specification and engineering qualification remain unverified. See [Product intake](product-intake.md).
 
 Module 1 now includes optional owner-supplied monetization model, pricing framework and target contract value, with literal labeled extraction, typed accept/adjust/dismiss review and provenance. These internal targets stay outside outbound draft-model payloads, Band packets, search plans and native graph facts. Existing profile hashes remain compatible. This closes an intake-format gap; customer pricing and unit economics remain unvalidated. See [Commercial planning](commercial-planning.md).

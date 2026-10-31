@@ -19,7 +19,7 @@ const profile = z.object({
   capabilities: z.record(z.string().max(100), z.object({ value: text, status: z.enum(['unknown', 'website', 'reviewed']) }).strict()),
   commercial: z.object({ certification: text, leadTime: text, minimumOrder: text, deliveryTerms: text, quoteBasis: text,monetizationModel:z.string().max(600).optional(),pricingFramework:z.string().max(600).optional(),targetContractValue:z.string().max(600).optional() }).strict(),
   icp: z.object({ industries: text, regions: text, segments: strings, roles: strings, motion: z.enum(['', 'replacement', 'oem', 'channel']), exclusions: text,
-    naics: text.optional(), headcount: text.optional(), revenue: text.optional(), triggers: text.optional(), referenceWins: text.optional(), excludedDomains: text.optional() }).strict(),
+    naics: text.optional(), headcount: text.optional(), revenue: text.optional(), triggers: text.optional(), referenceWins: text.optional(), excludedDomains: text.optional(),targetTitles:z.string().max(600).optional(),targetSeniority:z.string().max(600).optional() }).strict(),
   expansionDecisions: z.record(z.string().max(100), z.enum(['accepted', 'rejected', 'undecided'])),
 }).strict();
 const parse = (schema, data) => { const r = schema.safeParse(data); if (!r.success) throw new AppError(400, 'Invalid request: ' + r.error.issues.map(i => `${i.path.join('.')} ${i.message}`).join('; '), 'invalid_request'); return r.data; };

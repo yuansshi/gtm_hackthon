@@ -6,6 +6,7 @@ import { invalidateAccountDrafts, suppressedContact } from './review-policy.js';
 import { communicationContext, requireCommunicationAllowed, recipientCommunicationBlock } from './communication-policy.js';
 import { publicSourceUrl, readPublicSource } from './public-source.js';
 import { companyFieldLabels, companyEvidenceKey } from '../src/company-evidence.js';
+import {personaScope,comparePersona} from '../src/buyer-persona.js';
 
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 export const contactEvidenceDigest=lead=>digest({domain:lead.domain,facts:lead.facts,source:lead.source,contactSource:lead.contactSource,sourceIntakeId:lead.sourceIntakeId,evidenceNeedsReview:!!lead.evidenceNeedsReview});
@@ -44,7 +45,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
     if(kind==='company'&&(state.enrichmentRuns||[]).filter(run=>run.kind==='company').length>=30)throw new AppError(409,'This prototype reached its 30-company-lookup history limit. Review/export this campaign before more company work.','company_history_full');
     if((state.enrichmentRuns||[]).some(run=>['running','pending'].includes(run.status)))throw new AppError(409,'Finish the current vendor contact request before starting another.','enrichment_in_progress');
     const reservation=store.reserve(id,'vendor_'+kind,costs.enrichment,leadId);
-    const run={id:input.requestId,leadId,businessId:id,kind,domain:lead.domain.replace(/^www\./,''),requestHash,profileHash:profileDigest(state),evidenceHash:contactEvidenceDigest(lead),communicationContext:communicationContext(state),status:'running',startedAt:now(),reservation,requests:0,...extra};
+    const run={id:input.requestId,leadId,businessId:id,kind,domain:lead.domain.replace(/^www\./,''),requestHash,profileHash:profileDigest(state),evidenceHash:contactEvidenceDigest(lead),communicationContext:communicationContext(state),status:'running',startedAt:now(),reservation,requests:0,...(kind==='search'?{personaTargets:personaScope(state.icp)}:{}),...extra};
     store.mutate(id,current=>{current.enrichmentRuns||=[];current.enrichmentRuns.unshift(run);const entry=current.wallet.ledger.find(entry=>entry.id===reservation);entry.provider='Hunter';entry.providerBilling='Local credits are separate from Hunter charges.';entry.externalStatus='provider_requested';entry.enrichmentRunId=run.id;addActivity(current,kind==='company'?'Company enrichment started':kind==='search'?'Vendor contact search started':'Vendor email verification started',`${lead.name}; Hunter ${kind}. Explicit external-processing confirmation recorded. No recipient or outreach approval changed.`,'Enrichment agent',{leadId,enrichmentRunId:run.id});});
     return {run,lead};
   };
@@ -114,7 +115,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
     const previous=(initial.contactReviews||[]).find(review=>review.id===input.requestId);
     if(previous){if(previous.reviewHash!==reviewHash)throw new AppError(409,'This review ID belongs to a different contact decision.','contact_review_conflict');}
     else {
-      const {candidate}=candidateFor(initial,leadId,input.searchRunId,input.candidateId);
+      const {candidate,run:searchRun}=candidateFor(initial,leadId,input.searchRunId,input.candidateId);
       if(!emailForDomain(candidate.email,lead.domain.replace(/^www\./,''))||!candidate.sources.length)throw new AppError(409,'Choose a same-domain contact with public evidence links.','contact_evidence_required');
       const verification=runFor(initial,input.verificationRunId,leadId);
       if(verification.kind!=='verify'||verification.status!=='completed'||verification.candidateId!==candidate.id||verification.searchRunId!==input.searchRunId||verification.result.email!==candidate.email)throw new AppError(409,'Complete verification for this exact contact before selecting it.','contact_verification_required');
@@ -128,7 +129,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
         if(candidate.name){current.vendorPeople||=[];const person={name:candidate.name,role:candidate.role||'Role unknown',relevance:'Vendor-returned role reviewed for persona relevance; buying responsibility is unverified.',source:candidate.sources[0].url,provenance:'hunter_reviewed',vendorCandidateId:candidate.id,reviewedAt:now()};current.vendorPeople=mergeAccountPeople(current.vendorPeople,[person]);current.people=mergeAccountPeople(current.people,current.vendorPeople);}
         const ids=invalidateAccountDrafts(state,leadId,{reason:'account_contact_changed'});
         for(const draft of state.drafts.filter(draft=>ids.includes(draft.id))){draft.recipient=draft.channel==='email'?contact.email:contact.linkedIn||'';draft.sources=[...new Set([...(draft.sources||[]),...candidate.sources.map(source=>source.url)])];}
-        state.contactReviews||=[];state.contactReviews.unshift({id:input.requestId,reviewHash,leadId,businessId:id,searchRunId:input.searchRunId,candidateId:candidate.id,verificationRunId:input.verificationRunId,acknowledgedUncertain:input.acknowledgedUncertain,reviewedAt:now(),graphStatus:'pending'});
+        state.contactReviews||=[];state.contactReviews.unshift({id:input.requestId,reviewHash,leadId,businessId:id,searchRunId:input.searchRunId,candidateId:candidate.id,verificationRunId:input.verificationRunId,acknowledgedUncertain:input.acknowledgedUncertain,personaReview:comparePersona(candidate,searchRun.personaTargets),reviewedAt:now(),graphStatus:'pending'});
         addActivity(state,'Vendor contact selected',`${current.name}; owner-reviewed contact and dated Hunter checks. ${ids.length} editable unsent message(s) received new recipient/version review. No buying authority or message delivery verified.`,'You',{leadId,contactReviewId:input.requestId});
       },input.revision);
     }

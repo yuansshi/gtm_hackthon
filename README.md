@@ -29,6 +29,8 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 
 ## What is real and what is simulated
 
+The ICP form supports optional **target job titles and seniority**. Reviewed intake can propose them, and new contact searches retain their local target scope. Candidate inspection compares saved phrases with vendor title/seniority text without inferring rank or buying authority; older searches remain Unrecorded. Hunter requests still contain only the account domain or selected address. See [Buyer personas](docs/buyer-personas.md).
+
 Guided intake also proposes a **product description and business-specific capability values** from explicit labels or optional model output. Accept/adjust/dismiss review never confirms a specification: applied capability values return to Unconfirmed, with field provenance and separate technical review. The form’s Product input format shows the selected business’s labels. See [Product and technical intake](docs/product-intake.md).
 
 Product intake also supports optional **monetization model, pricing framework and target contract value** under Capabilities → Internal commercial plan. Explicit labeled intake can propose them for accept/adjust/dismiss review. Unknowns stay blank; literal currency/units remain owner inputs, and the planning fields stay outside outreach model context, Band packets, prospect search and graph facts. See [Commercial planning](docs/commercial-planning.md).

@@ -1,6 +1,7 @@
 // Public website statements are starting evidence, not verified manufacturing limits.
 import {commercialPlanningFields} from './commercial-planning.js';
 import {productIntakeFields,capabilityIntakeKey} from './product-intake.js';
+import {personaFields} from './buyer-persona.js';
 export const businesses = [
   {
     id: 'huasheng', name: 'Huasheng Castings', initials: 'HS', color: 'blue',
@@ -133,6 +134,7 @@ export function profileConfidence(state) {
     ['regions', state.icp.regions, 'Campaign owner input'],
     ['segments', state.icp.segments, 'Campaign owner input'],
     ['roles', state.icp.roles, 'Role hypothesis; buying authority unverified'],
+    ...personaFields.map(({key,label})=>[key,state.icp[key],'Owner-defined persona target; current role and authority unverified',label]),
     ['naics', state.icp.naics, 'Owner-provided classification; verify each company'],
     ['headcount', state.icp.headcount, 'Owner-defined target; account size unverified'],
     ['revenue', state.icp.revenue, 'Owner-defined target; account revenue unverified'],

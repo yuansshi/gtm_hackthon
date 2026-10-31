@@ -1,11 +1,13 @@
 // Deliberately bounded local extraction. No model or external service is used.
 import {commercialPlanningFields,commercialIntakeFields} from '../src/commercial-planning.js';
 import {businesses} from '../src/businesses.js';
+import {personaFields} from '../src/buyer-persona.js';
 import {productIntakeFields,isProductIntakeField,capabilityIntakeKey} from '../src/product-intake.js';
-export const intakeFields = [...new Set(['industries', 'regions', 'segments', 'roles', 'motion', 'naics', 'headcount', 'revenue', 'triggers', 'referenceWins', 'exclusions', 'excludedDomains',...commercialIntakeFields,...businesses.flatMap(b=>productIntakeFields(b).map(f=>f.field))])];
+export const intakeFields = [...new Set(['industries', 'regions', 'segments', 'roles', 'motion', 'naics', 'headcount', 'revenue', 'triggers', 'referenceWins', 'exclusions', 'excludedDomains',...personaFields.map(f=>f.key),...commercialIntakeFields,...businesses.flatMap(b=>productIntakeFields(b).map(f=>f.field))])];
 export const arrayFields = ['segments', 'roles'];
 export function validIntakeValue(field, value,businessId) {
   if (!intakeFields.includes(field)) return false;
+  if(personaFields.some(f=>f.key===field))return typeof value==='string'&&!!value.trim()&&value.length<=600;
   if(isProductIntakeField(field))return typeof value==='string'&&!!value.trim()&&value.length<=3000&&(!capabilityIntakeKey(field)||productIntakeFields(businesses.find(b=>b.id===businessId)).some(f=>f.field===field));
   if(commercialIntakeFields.includes(field))return typeof value==='string'&&!!value.trim()&&value.length<=600;
   if (arrayFields.includes(field)) return Array.isArray(value) && value.length > 0 && value.length <= 20 && value.every(v => typeof v === 'string' && v.trim() && v.length <= 200);
@@ -22,8 +24,8 @@ const positiveMatch = (input, expression) => {
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 // Full labeled value, or one complete unlabeled source clause. Never let a
 // model cherry-pick a number from the supplied qualification text.
-export function productValueSupported(field,value,evidence,message,businessId){
-  const definition=productIntakeFields(businesses.find(b=>b.id===businessId)).find(f=>f.field===field);
+export function literalIntakeValueSupported(field,value,evidence,message,businessId){
+  const definition=[...productIntakeFields(businesses.find(b=>b.id===businessId)),...personaFields.map(f=>({...f,field:f.key}))].find(f=>f.field===field);
   if(!definition)return false;
   const literal=text=>text.replace(/\s+/g,' ').trim();
   if(literal(value)!==literal(evidence))return false;
@@ -31,14 +33,14 @@ export function productValueSupported(field,value,evidence,message,businessId){
   const label=new RegExp('^'+escaped(definition.label)+'[^\\S\\r\\n]*[:=][^\\S\\r\\n]*(.*)$','i');
   const matches=clauses.map(clause=>clause.match(label)).filter(Boolean);
   if(matches.length){const values=[...new Set(matches.map(m=>literal(m[1])).filter(Boolean))];return values.length===1&&values[0]===literal(value);}
-  const labels=[...commercialPlanningFields,...businesses.flatMap(productIntakeFields)].map(f=>f.label);
+  const labels=[...commercialPlanningFields,...personaFields,...businesses.flatMap(productIntakeFields)].map(f=>f.label);
   const anyLabel=new RegExp('^(?:'+[...new Set(labels)].map(escaped).join('|')+')[^\\S\\r\\n]*[:=]','i');
   return clauses.some(clause=>!anyLabel.test(clause)&&literal(clause)===literal(value));
 }
 export function localIntake(message,businessId) {
   const suggestions = []; const questions = [];
   const add = (field, value, evidence) => suggestions.push({ field, value, confidence: 1, basis: 'user_input', evidence });
-  const allLabels=[...commercialPlanningFields,...businesses.flatMap(productIntakeFields)].map(f=>f.label);
+  const allLabels=[...commercialPlanningFields,...personaFields,...businesses.flatMap(productIntakeFields)].map(f=>f.label);
   const labeledLine=new RegExp('^[^\\S\\r\\n]*(?:'+[...new Set(allLabels)].map(escaped).join('|')+')[^\\S\\r\\n]*[:=]','i');
   // Product/price statements are not buyer geography, employee or motion criteria.
   const targetMessage=message.split(/[;\r\n]/).filter(line=>!labeledLine.test(line)).join('\n');
@@ -62,7 +64,7 @@ export function localIntake(message,businessId) {
     const values = domains[1].split(/[\s,]+/).filter(d => /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(d));
     if (values.length) add('excludedDomains', values.join(', '), domains[0]);
   }
-  const labeledFields=[...commercialPlanningFields.map(({key,label})=>({field:'commercial.'+key,label,maxLength:600})),...productIntakeFields(businesses.find(b=>b.id===businessId))];
+  const labeledFields=[...commercialPlanningFields.map(({key,label})=>({field:'commercial.'+key,label,maxLength:600})),...personaFields.map(({key,label})=>({field:key,label,maxLength:600})),...productIntakeFields(businesses.find(b=>b.id===businessId))];
   for(const {field,label,maxLength} of labeledFields){
     const expression=new RegExp('(?:^|[;\\n])[^\\S\\r\\n]*'+escaped(label)+'[^\\S\\r\\n]*[:=][^\\S\\r\\n]*([^;\\r\\n]+)','gi');
     const matches=[...message.matchAll(expression)],values=[...new Set(matches.map(match=>match[1].trim()))];

@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronDown, Download, Extern
 import { missingResearchFields } from './businesses';
 import GuidedIntake, { ConfidencePanel } from './GuidedIntake';
 import {commercialPlanningFields} from './commercial-planning.js';
+import {personaFields} from './buyer-persona.js';
 
 const tabs = [
   { title: 'Company & products', icon: Layers3 },
@@ -69,6 +70,7 @@ export default function ModuleOne({ business, state, change: commitChange, appro
             <Field id="reference-wins" label="Existing customers & reference wins" value={state.icp.referenceWins || ''} onChange={v => update('icp', 'referenceWins', v)} multiline placeholder="Not supplied — add only approved referenceable customer evidence" />
             <fieldset className="choice-fieldset"><legend>Buyer segments</legend><p>Select the organizations you want to approach.</p><div className="choice-chips">{business.segments.map(segment => <label key={segment} className={state.icp.segments.includes(segment) ? 'selected' : ''}><input type="checkbox" aria-label={`Target ${segment}`} checked={state.icp.segments.includes(segment)} onChange={() => toggle('icp', 'segments', segment)} />{segment}</label>)}</div></fieldset>
             <fieldset className="choice-fieldset"><legend>Buyer roles</legend><p>Suggested roles are preselected for your review.</p><div className="choice-chips">{business.roles.map(role => <label key={role} className={state.icp.roles.includes(role) ? 'selected' : ''}><input type="checkbox" aria-label={`Contact ${role}`} checked={state.icp.roles.includes(role)} onChange={() => toggle('icp', 'roles', role)} />{role}</label>)}</div></fieldset>
+            {personaFields.map(({key,label,help})=><Field key={key} id={'persona-'+key} label={label} value={state.icp[key]||''} maxLength={600} onChange={v=>update('icp',key,v)} help={help} placeholder="Not supplied"/>)}
             <div className="field"><label htmlFor="sales-motion">Primary sales motion</label><select id="sales-motion" value={state.icp.motion} onChange={e => update('icp', 'motion', e.target.value)}><option value="">Select a sales motion</option><option value="replacement">Replacement / maintenance (MRO)</option><option value="oem">New equipment / OEM supply</option><option value="channel">Distributor / channel development</option></select><small>This will shape discovery signals, qualification questions, and the first outreach.</small></div>
             <Field id="exclusions" label="Exclusions & qualification boundaries" value={state.icp.exclusions} onChange={v => update('icp', 'exclusions', v)} multiline />
             <Field id="excluded-domains" label="Exclude company domains" value={state.icp.excludedDomains || ''} onChange={v => update('icp', 'excludedDomains', v)} placeholder="example.com, another-company.com" help="Exact domain exclusions are enforced during research. Narrative qualification boundaries remain review questions." />
