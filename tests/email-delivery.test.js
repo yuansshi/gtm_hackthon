@@ -1,3 +1,4 @@
+import { defaultMessageBrief } from '../src/message-brief.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, randomUUID } from 'node:crypto';
@@ -126,12 +127,12 @@ test('provider opt-out and bounce events invalidate editable recipients and surv
   assert.throws(() => x.service.draft('allco', 'elliott', 'email', 'B', 2), { code: 'contact_suppressed' }); assert.equal(x.store.read('huasheng').contactSuppressions.length, 0);
 });
 test('public signed webhook bypasses only session/CSRF, with bounded signed input; reset retains receipts and late opt-outs', async t => {
-  const x = await setup(t); await x.enable(); const id = x.draft(); x.approve(id); const sent = await x.send(id), attempt = sent.delivery.attempts[0];
+  const x = await setup(t); await x.enable(); const id = x.service.draft('allco', 'elliott', 'email', 'A', 0, defaultMessageBrief); x.approve(id); const sent = await x.send(id), attempt = sent.delivery.attempts[0];
   const server = createApp({ store: x.store, service: x.service, serveStatic: false }).listen(0, '127.0.0.1'); await new Promise(resolve => server.on('listening', resolve)); t.after(() => new Promise(resolve => server.close(resolve))); const root = `http://127.0.0.1:${server.address().port}/api`;
   const webhook = root + '/delivery/sendgrid/events'; assert.equal((await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '[]' })).status, 403);
   assert.equal((await fetch(root + '/businesses/allco/drafts/' + id + '/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
   const session = await fetch(root + '/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }), { csrf } = await session.json(), headers = { 'content-type': 'application/json', cookie: session.headers.get('set-cookie').split(';')[0], 'x-csrf-token': csrf };
-  const reset = await fetch(root + '/businesses/allco/reset', { method: 'POST', headers, body: '{}' }); assert.equal(reset.status, 200); assert.equal((await reset.json()).delivery.attempts[0].id, attempt.id);
+  const reset = await fetch(root + '/businesses/allco/reset', { method: 'POST', headers, body: '{}' }); assert.equal(reset.status, 200); const retained = (await reset.json()).delivery.attempts[0]; assert.equal(retained.id, attempt.id); assert.deepEqual(retained.messageBrief, defaultMessageBrief); assert.deepEqual(attempt.messageBrief, defaultMessageBrief);
   const signedEvent = signed([x.event(attempt.id, 'unsubscribe')]); const receipt = await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json', 'x-twilio-email-event-webhook-signature': signedEvent.signature, 'x-twilio-email-event-webhook-timestamp': signedEvent.timestamp }, body: signedEvent.bytes }); assert.equal(receipt.status, 200); assert.equal((await receipt.json()).matched, 1); assert.equal(x.store.read('allco').leads.length, 0); assert.equal(x.store.read('allco').drafts.length, 0); assert.equal(x.store.read('allco').contactSuppressions.length, 1); assert.equal(x.store.read('allco').wallet.credits, 99);
 });
 test('five-per-minute live limit gates before another provider lookup and preserves successful request replays', async t => {

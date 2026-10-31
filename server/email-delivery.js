@@ -1,3 +1,4 @@
+import { requireMessageBrief } from './message-brief.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { AppError, digest, now, addActivity } from './store.js';
@@ -9,7 +10,7 @@ import { liveMessage } from './sendgrid-provider.js';
 const fail = (status, message, code) => { throw new AppError(status, message, code); };
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 export const lockedDraftStatuses = ['accepted', 'simulated', 'dispatching', 'delivery_unknown'];
-export const messageHash = draft => digest({ body: draft.body, subject: draft.subject, recipient: draft.recipient, version: draft.version, profileHash: draft.profileHash, businessId: draft.businessId, channel: draft.channel, sequenceStep: draft.sequenceStep, ...(draft.approvedDeliveryMode === 'live' ? { deliveryMode: 'live', senderHash: draft.approvedSenderHash, liveMessage: draft.approvedLiveMessage } : {}) });
+export const messageHash = draft => digest({ body: draft.body, subject: draft.subject, recipient: draft.recipient, version: draft.version, profileHash: draft.profileHash, businessId: draft.businessId, channel: draft.channel, sequenceStep: draft.sequenceStep, ...(draft.messageBrief ? { messageBrief: draft.messageBrief } : {}), ...(draft.approvedDeliveryMode === 'live' ? { deliveryMode: 'live', senderHash: draft.approvedSenderHash, liveMessage: draft.approvedLiveMessage } : {}) });
 const companyKey = state => digest({ name: state.company.name, website: state.company.website });
 const fresh = value => Number.isFinite(Date.parse(value)) && Date.parse(value) <= Date.now() && Date.now() - Date.parse(value) <= 15 * 60000;
 const draftFor = (state, id) => state.drafts.find(draft => draft.id === id) || fail(404, 'Draft not found in this business.', 'draft_not_found');
@@ -81,6 +82,7 @@ export function createEmailDelivery({ store, graph, competitors, provider, snaps
   };
   const validate = (state, draft, expectedVersion) => {
     if (draft.version !== expectedVersion || draft.status !== 'approved' || draft.approvedDeliveryMode !== 'live' || !draft.approvedHash || draft.approvedHash !== messageHash(draft)) fail(409, 'Approve this exact message for live email before sending.', 'live_approval_required');
+    requireMessageBrief(draft);
     if (!state.approved || draft.profileHash !== profileDigest(state)) fail(409, 'The approved campaign context changed.', 'stale_profile');
     if ((state.delivery?.attempts || []).filter(item => Date.parse(item.submittedAt) >= Date.now() - 60000).length >= 5) fail(429, 'This business reached the prototype limit of five live submissions per minute. Wait before reviewing another send.', 'delivery_rate_limited');
     const lead = leadFor(state, draft.leadId); requireEligible(lead, state); requireFreshSignals(draft, lead); requireFreshCompany(draft, lead); requireCommunicationAllowed(state, lead, 'email', draft.recipient);
@@ -124,7 +126,7 @@ export function createEmailDelivery({ store, graph, competitors, provider, snaps
       store.mutate(id, state => {
         const exact = draftFor(state, draftId); validate(state, exact, input.version);
         state.delivery.attempts ||= [];
-        state.delivery.attempts.unshift({ id: input.requestId, requestHash, draftId, leadId: draft.leadId, version: draft.version, approvalHash: draft.approvedHash, message: structuredClone(draft.approvedLiveMessage), recipientDisplay: maskedCommunicationTarget('email', address), reservation, status: 'sending', submittedAt: now(), deliveryStatus: 'submitting', events: [], seenEventIds: [], graphStatus: 'pending' });
+        state.delivery.attempts.unshift({ id: input.requestId, requestHash, draftId, leadId: draft.leadId, version: draft.version, approvalHash: draft.approvedHash, messageBrief: draft.messageBrief ? structuredClone(draft.messageBrief) : null, message: structuredClone(draft.approvedLiveMessage), recipientDisplay: maskedCommunicationTarget('email', address), reservation, status: 'sending', submittedAt: now(), deliveryStatus: 'submitting', events: [], seenEventIds: [], graphStatus: 'pending' });
         exact.status = 'dispatching'; exact.deliveryMode = 'live'; exact.deliveryId = input.requestId;
         state.wallet.ledger.find(item => item.id === reservation).externalStatus = 'provider_requested';
         addActivity(state, 'Live email submission started', 'One immutable request recorded before transmission. It will not replay automatically.', 'Outreach agent', { draftId, mode: 'live', deliveryId: input.requestId });

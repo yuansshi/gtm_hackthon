@@ -1,3 +1,4 @@
+import { checkedMessageBrief, requireMessageBrief, messageBriefInstructions, briefTemplate } from './message-brief.js';
 import { randomUUID } from 'node:crypto';
 import { createResearchBrief, missingResearchFields, businessById } from '../src/businesses.js';
 import { researchCatalog, competitors, costs, pipelineStages } from './catalog.js';
@@ -256,14 +257,15 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     } catch (error) { store.settle(id, reservation, false); throw error; }
   };
 
-  const draft = (id, leadId, channel = 'email', variant = 'A', sequenceStep = 0) => store.mutate(id, s => {
+  const draft = (id, leadId, channel = 'email', variant = 'A', sequenceStep = 0, messageBrief) => store.mutate(id, s => {
     if (!s.approved) throw new AppError(409, 'Approve the current profile before drafting.', 'profile_approval_required');
     const lead = findLead(s, leadId); if (!lead.selected) throw new AppError(409, 'Shortlist the account first.', 'shortlist_required');
     requireEligible(lead, s);
     requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
     const existing = s.drafts.find(d => !d.modelMetadata && d.leadId === leadId && d.channel === channel && d.variant === variant && d.sequenceStep === sequenceStep && d.profileHash === profileDigest(s));
+    const brief = checkedMessageBrief(messageBrief === undefined ? existing?.messageBrief : messageBrief);
     const currentSignalHash = digest({ context: signalContext(lead), usableIds: activeSignals(lead).map(signal=>signal.id) });
-    if (existing && (lockedDraftStatuses.includes(existing.status) || existing.signalContextHash === currentSignalHash || (!existing.signalContextHash && !signalContext(lead).length))) return existing.id;
+    if (existing && (lockedDraftStatuses.includes(existing.status) || digest(existing.messageBrief || null) === digest(brief || null) && (existing.signalContextHash === currentSignalHash || (!existing.signalContextHash && !signalContext(lead).length)))) return existing.id;
     const product = id === 'allco' ? 'custom hydraulic cylinders' : 'wear-resistant castings';
     const greeting = `Hello ${lead.name} engineering and sourcing team,`;
     const value = variant === 'A' ? `I saw your ${lead.application.toLowerCase()} portfolio [1]. ${s.company.name} supplies ${product} [2].` : `Could you help us understand your supplier qualification process for ${product}? Your ${lead.application.toLowerCase()} portfolio appears relevant to our initial research [1].`;
@@ -272,15 +274,17 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     const signals = activeSignals(lead).slice(0, 2);
     const trigger = signals.map((signal,index) => `Your company published on ${signal.eventDate}: “${signal.quote}” [${index+3}]. This is context for qualification; current sourcing demand is unconfirmed.`).join('\n\n');
     const body = channel === 'linkedin' ? `${greeting}\n\n${value}${trigger?'\n\n'+trigger:''}\n\n${sequenceStep ? 'Following up on the introduction below. ' : ''}${ask}\n\n${caveat}` : `${greeting}\n\n${sequenceStep ? 'Following up on our supplier introduction.\n\n' : ''}${value}${trigger?'\n\n'+trigger:''}\n\n${ask}\n\n${caveat}\n\nBest,\n${s.company.name}\n\n[1] ${lead.source}\n[2] ${s.company.website}${signals.map((signal,index)=>'\n['+(index+3)+'] '+signal.source).join('')}`;
+    const tailored = brief ? briefTemplate({ state: s, lead, channel, variant, sequenceStep, signals, brief, product }) : null;
     const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep],
       recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
-      subject: `${sequenceStep ? 'Follow-up: ' : ''}${product} — supplier qualification`, body,
+      subject: tailored?.subject || `${sequenceStep ? 'Follow-up: ' : ''}${product} — supplier qualification`, body: tailored?.body || body, messageBrief: brief, approvedAt: null, approvedDeliveryMode: null, approvedSenderHash: null, approvedLiveMessage: null,
       profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(),
       generation: 'Source-grounded template; no model used', sources: [...new Set([lead.source, s.company.website, ...signals.map(signal=>signal.source), ...(lead.contact.sources || []).map(source => source.url)])], linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: currentSignalHash, actor: 'Drafting agent' };
     if(existing)Object.assign(existing,d,{id:existing.id,version:(existing.version||1)+1});else s.drafts.unshift(d); addActivity(s, 'Outreach draft prepared', `${lead.name}; ${channel}; variant ${variant}; step ${sequenceStep + 1}. Human review required.`, 'Drafting agent'); return existing?.id||d.id;
   }).result;
 
-  const draftWithModel = async (id, leadId, { channel = 'email', variant = 'A', sequenceStep = 0, requestId, acknowledgedExternalProcessing = false, revision }) => {
+  const draftWithModel = async (id, leadId, { channel = 'email', variant = 'A', sequenceStep = 0, requestId, acknowledgedExternalProcessing = false, revision, messageBrief }) => {
+    const brief = checkedMessageBrief(messageBrief);
     if (!acknowledgedExternalProcessing) throw new AppError(400, 'Confirm sending the supplier profile and this account’s public evidence to the project model.', 'external_processing_review_required');
     const before = store.read(id); const account = findLead(before, leadId);
     const accountHash = accountContextDigest(account);
@@ -288,7 +292,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (!before.approved || !account.selected) throw new AppError(409, 'Approve the profile and shortlist this account first.', 'profile_approval_required');
     requireEligible(account, before);
     requireCommunicationAllowed(before, account, channel, channel === 'email' ? account.contact?.email : account.contact?.linkedIn);
-    const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep }, 'model', revision);
+    const started = beginAssistant(id, 'draft', requestId, { leadId, channel, variant, sequenceStep, ...(brief ? { messageBrief: brief } : {}) }, 'model', revision);
     if (started.previous) return { ...snapshot(id), activeDraftId: started.previous.draftId };
     const { initial, run } = started;
     let generated;
@@ -297,8 +301,9 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       const hq=account.companyProfile?.status==='reviewed'?account.companyProfile.fields.headquarters:null;
       const companyHeadquarters=hqCorroborated(hq)?{city:hq.city,country:hq.country,quote:hq.corroboration.text,sourceUrl:hq.corroboration.url,qualification:'Owner-reviewed company-source HQ city/country only; other address components, firmographics and buying intent remain unverified.'}:null;
       const sources = [...new Set([account.source, account.contactSource, account.signal.source, ...signals.map(signal=>signal.source), ...(companyHeadquarters?[companyHeadquarters.sourceUrl]:[]), ...(account.factEvidence || []).map(fact => fact.url), ...account.people.map(p => p.source), initial.company.website])];
-      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep };
+      const context = { supplier: createResearchBrief(initial), account: { name: account.name, application: account.application, facts: account.facts, source: account.source, signal: account.signal, companyHeadquarters, marketSignals: signals.map(signal=>({kind:signal.kind,quote:signal.quote,eventDate:signal.eventDate,source:signal.source,qualification:'Owner-reviewed public event; purchasing intent unconfirmed.'})), people: account.people.map(p => ({ name: p.name, role: p.role, relevance: p.relevance, source: p.source })), qualification: 'No current RFQ, buying authority, or purchase intent confirmed.' }, channel, variant, sequenceStep, ...(brief ? { messageBrief: messageBriefInstructions(brief) } : {}) };
       generated = await model.draft({ context, sources, requestId });
+      requireMessageBrief({ ...generated.value, messageBrief: brief }, true);
       finishAssistant(id, run, generated.value, generated.metadata, (s, currentRun) => {
         const lead = findLead(s, leadId); requireEligible(lead, s);
         requireCommunicationAllowed(s, lead, channel, channel === 'email' ? lead.contact?.email : lead.contact?.linkedIn);
@@ -306,7 +311,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
         if (accountContextDigest(lead) !== accountHash) throw new AppError(409, 'Account evidence changed during generation. Review the new context and request a fresh draft.', 'stale_account_context');
         if (!s.approved || !lead.selected) throw new AppError(409, 'Account or profile approval changed during generation.', 'stale_assistant_context');
         const d = { id: randomUUID(), businessId: id, leadId, channel, variant, sequenceStep, suggestedDay: [0, 3, 7][sequenceStep], recipient: channel === 'email' ? lead.contact.email || '' : lead.contact.linkedIn || '',
-          subject: generated.value.subject, body: generated.value.body, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
+          subject: generated.value.subject, body: generated.value.body, messageBrief: brief, claims: generated.value.claims, qualificationQuestions: generated.value.qualificationQuestions,
           profileHash: profileDigest(s), status: 'draft', version: 1, approvedHash: null, createdAt: now(), linkedCompanyReviewId:companyHeadquarters?account.companyProfile.id:null, linkedSignalIds: signals.map(signal=>signal.id), signalContextHash: digest({context:signalContext(lead),usableIds:activeSignals(lead).map(signal=>signal.id)}), generation: `OpenAI / ${generated.metadata.model}; human review required`, sources: [...new Set(generated.value.claims.map(c => c.sourceUrl))], actor: 'Model drafting agent', modelMetadata: generated.metadata, assistantRunId: run.id };
         s.drafts.unshift(d); currentRun.draftId = d.id;
       });
@@ -319,7 +324,8 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     if (expectedVersion !== undefined && d.version !== expectedVersion) throw new AppError(409, 'This draft changed in another session. Reload it before editing.', 'stale_draft');
     if (lockedDraftStatuses.includes(d.status)) throw new AppError(409, 'A dispatched or uncertain-delivery message is immutable.', 'draft_locked');
     for (const key of ['body', 'subject', 'recipient']) if (patch[key] !== undefined) d[key] = patch[key];
-    d.version++; d.approvedHash = null; d.status = 'draft'; d.approvedAt = null;
+    if (patch.messageBrief !== undefined) d.messageBrief = checkedMessageBrief(patch.messageBrief);
+    d.version++; d.approvedHash = null; d.status = 'draft'; d.approvedAt = null; d.approvedDeliveryMode = null; d.approvedSenderHash = null; d.approvedLiveMessage = null;
     addActivity(s, 'Draft edited', 'Previous approval revoked. Review the exact recipient, subject, and message again.');
   }).state;
 
@@ -333,6 +339,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
     requireFreshCompany(d, findLead(s,d.leadId));
     requireCommunicationAllowed(s, findLead(s, d.leadId), d.channel, d.recipient);
     if (!d.body.trim() || (d.channel === 'email' && !d.subject.trim())) throw new AppError(400, 'Message and subject must not be empty.', 'empty_message');
+    requireMessageBrief(d);
     if (!['dry_run', 'live'].includes(deliveryMode)) throw new AppError(400, 'Choose dry run or live email approval.', 'invalid_delivery_mode');
     Object.assign(d, deliveryMode === 'live' ? emailDelivery.approval(s, d) : { approvedDeliveryMode: 'dry_run', approvedSenderHash: null, approvedLiveMessage: null });
     d.approvedHash = messageHash(d); d.approvedAt = now(); d.status = 'approved';
@@ -349,6 +356,7 @@ export function createService({ store, graph, review = reviewCandidate, mx = che
       if (!s.approved || d.profileHash !== profileDigest(s)) throw new AppError(409, 'The approved campaign context is stale.', 'stale_profile');
       if (!d.recipient.trim()) throw new AppError(400, 'A recipient is required, even for a dry run. Do not invent an email or LinkedIn profile.', 'recipient_required');
       if (s.drafts.some(other => other.id !== d.id && other.leadId === d.leadId && other.channel === d.channel && other.sequenceStep === d.sequenceStep && lockedDraftStatuses.includes(other.status))) throw new AppError(409, 'A variant for this account, channel, and step has already been dispatched.', 'variant_already_sent');
+      requireMessageBrief(d);
       if (s.wallet.credits < costs.outreach) throw new AppError(402, 'Insufficient credits. No message was dispatched.', 'insufficient_credits');
       const lead = findLead(s, d.leadId);
       requireEligible(lead, s);
