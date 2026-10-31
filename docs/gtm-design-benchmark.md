@@ -62,6 +62,7 @@ Generic template suggestions that emphasized landing-page heroes, automatic anim
 - Workspace navigation search with direct routes to real sections and researched accounts.
 - Compact account views, search/sort, and a contextual account preview with source evidence and previous/next navigation.
 - Board/list pipeline views with scope and stage filters based on the same real records.
+- A graph explorer with Map/Records views, intersecting search/type/neighbor filters, a contextual source inspector, directional relationship navigation, and direct account handoff. Filtering an existing snapshot is free; refreshing the native graph retains its existing one-credit charge.
 - Consistent surfaces, controls, spacing, typography, and status colors across the existing profile, graph, billing, and review modules.
 - Existing approval, quota, workspace separation, and demo-only delivery behavior remain authoritative on the server.
 
@@ -78,10 +79,11 @@ This redesign does not add live buying-intent verification, provider connections
 
 ## Validation
 
-- Production build passed; all 25 existing tests passed, including business scoping, exact-version approval, edit invalidation, persistence, quota checks, and native graph paths.
+- The initial redesign passed all 25 then-existing tests. The expanded portal now passes all 190 tests and its production build, including business scoping, exact-version approval, edit invalidation, persistence, quota checks, and native graph paths.
 - Browser verified at the default 1280 × 720 desktop viewport with no page-level horizontal overflow in HITL. Wide account tables and the ten-stage board scroll within their own working areas.
 - Verified summary-to-shortlist navigation, account search/sort, evidence tabs, previous/next preview, Escape dismissal, and command-search account handoff.
 - Verified board/list switching, scope and stage filter intersection, empty results, search, and clear-filter recovery.
+- A separate labeled graph fixture verifies native querying, Map/Records views, combined text/type/neighbor filters, retained selection outside filters, empty recovery, keyboard node activation, directional record traversal and exact account handoff. Switching businesses clears the old snapshot. Querying consumes the existing local credit; browsing/filtering does not repeat the query. At 1280 × 720, the map scrolls internally and the page has no horizontal overflow; browser warning/error logs are empty. No live provider or outbound message is involved, and the main campaign records/credits are unchanged.
 - Verified Allco/Huasheng switching and that a search for an Allco account returns no result in Huasheng.
 - In an isolated local demo workspace, verified that approval and dry-run actions start disabled; acknowledgement permits exact-version approval; saving an edit creates the next version and requires approval again. No external message was sent.
 - Product intake, native graph query, and billing rendered successfully; the browser reported no warning/error logs during the final smoke check.
