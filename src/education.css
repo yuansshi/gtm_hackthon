@@ -1,0 +1,29 @@
+.ed-workbench { margin: 18px 0; border: 1px solid #dfe6ef; border-radius: 8px; background: white; }
+.ed-workbench > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 14px; color: #344661; font-size: 13px; }
+.ed-workbench > summary span { margin-left: auto; color: #667085; font-size: 12px; }
+.ed-body { padding: 0 15px 15px; border-top: 1px solid #e6e9ef; }
+.ed-body > p { font-size: 13px; line-height: 1.7; color: #526178; }
+.ed-body h5 { color: #202a38; font-size: 14px; margin: 15px 0 10px; }
+.ed-body label { display: flex; flex-direction: column; gap: 7px; color: #465670; font-size: 12px; font-weight: 600; margin: 13px 0; }
+.ed-body input:not([type=checkbox]), .ed-body select, .ed-body textarea { width: 100%; min-width: 0; border: 1px solid #d6deea; border-radius: 6px; padding: 10px; font: inherit; color: #202a38; background: white; }
+.ed-body textarea { resize: vertical; }
+.ed-body .ed-check { flex-direction: row; align-items: flex-start; gap: 9px; font-weight: 400; line-height: 1.7; }
+.ed-check input { flex: 0 0 auto; margin-top: 3px; }
+.ed-fetch, .ed-review { padding: 0 0 15px; border-bottom: 1px solid #e6e9ef; }
+.ed-fetch p, .ed-review p, .ed-record p { font-size: 12px; line-height: 1.7; color: #5d6c80; }
+.ed-body .source-link { margin: 7px 0; }
+.ed-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.ed-run { margin: 14px 0; padding: 12px; background: #f4f7fb; border-radius: 6px; color: #445776; font-size: 12px; }
+.ed-run small { display: block; margin-top: 6px; }
+.ed-source { margin: 10px 0; font-size: 12px; color: #596b82; }
+.ed-source summary, .ed-record summary { cursor: pointer; padding: 8px 0; font-size: 12px; }
+.ed-source p { max-height: 230px; overflow-y: auto; padding: 12px; background: #f7f8fa; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ed-record { padding: 15px 0; border-top: 1px solid #e6e9ef; }
+.ed-record-title { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.ed-record-title strong { font-size: 13px; color: #202a38; }
+.ed-record small, .ed-path-evidence small { display: block; font-size: 12px; color: #6b788b; margin: 8px 0; }
+.ed-record blockquote, .ed-path-evidence blockquote { border-left: 3px solid #b7c9e7; padding: 10px 14px; margin: 12px 0; color: #43546e; background: #f7f9fc; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.ed-warning { color: #835415 !important; background: #fff6e7; padding: 10px; border-radius: 6px; }
+.ed-body .ed-footnote { margin-top: 16px; font-size: 12px; color: #69778b; }
+.ed-path-evidence { margin-top: 17px; padding-top: 12px; border-top: 1px solid #e6e9ef; }
+.ed-workbench :focus-visible { outline: 2px solid #315cba; outline-offset: 3px; }

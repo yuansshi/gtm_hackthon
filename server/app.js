@@ -63,7 +63,7 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
       const path = req.path;
       const charged = req.method === 'POST' && (
         ['/discovery', '/source-intakes', '/prospect-searches', '/competitor-research', '/graph/query'].includes(path) ||
-        /^\/leads\/[^/]+\/(?:enrich|people-research|signal-checks|company\/lookup|contacts\/(?:search|verify))$/.test(path) ||
+        /^\/leads\/[^/]+\/(?:enrich|people-research|education-research|signal-checks|company\/lookup|contacts\/(?:search|verify))$/.test(path) ||
         /^\/drafts\/[^/]+\/simulate$/.test(path) ||
         (path === '/assistant/intake' && req.body?.mode === 'model') ||
         (/^\/leads\/[^/]+\/drafts$/.test(path) && req.body?.generation === 'model')
@@ -154,6 +154,23 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
     res.status(202).json({ ...service.snapshot(req.params.business), activePeopleResearchId: run.id });
   });
   const personDecision = { requestId: z.string().uuid(), revision, acknowledged: z.boolean() };
+  app.post(base + '/leads/:lead/education-research', (req, res) => {
+    const input = parse(z.object({ requestId: z.string().uuid(), revision, personReviewId: z.string().uuid(), identityUrl: z.string().max(2000) }).strict(), req.body);
+    const run = service.startEducationResearch(req.params.business, req.params.lead, input);
+    res.status(202).json({ ...service.snapshot(req.params.business), activeEducationResearchId: run.id });
+  });
+  app.post(base + '/leads/:lead/education-research/:run/review', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, institutionName: z.string().min(1).max(200), kind: z.enum(['attended', 'degree']), educationQuote: z.string().min(12).max(2000), identityQuote: z.string().min(12).max(600) }).strict(), req.body);
+    res.json(await service.reviewEducation(req.params.business, req.params.lead, req.params.run, input));
+  });
+  app.post(base + '/leads/:lead/education-research/:run/dismiss', (req, res) => {
+    const input = parse(z.object({ revision }).strict(), req.body);
+    res.json(service.dismissEducationResearch(req.params.business, req.params.lead, req.params.run, input.revision));
+  });
+  app.post(base + '/leads/:lead/education/withdraw', async (req, res) => {
+    const input = parse(z.object({ ...personDecision, reviewId: z.string().uuid() }).strict(), req.body);
+    res.json(await service.withdrawEducation(req.params.business, req.params.lead, input));
+  });
   app.post(base + '/leads/:lead/people-research/:run/review', async (req, res) => {
     const input = parse(z.object({ ...personDecision, name: z.string().trim().min(1).max(200), role: z.string().trim().min(1).max(200), roleQuote: z.string().min(12).max(2000), formerEmployer: z.object({ name: z.string().min(1).max(200), quote: z.string().min(12).max(2000), identityQuote: z.string().min(12).max(600) }).strict().nullable() }).strict(), req.body);
     res.json(await service.reviewPerson(req.params.business, req.params.lead, req.params.run, input));

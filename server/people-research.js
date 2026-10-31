@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError, addActivity, digest, now } from './store.js';
 import { publicSourceUrl, readPublicSource, sourceSite } from './public-source.js';
 import { communicationContext, requireAccountCommunication } from './communication-policy.js';
+import { checkEducationSources, markEducationProjection } from './education-research.js';
 import { costs } from './catalog.js';
 import { normalizePersonText as clean, personDateFresh, personSourceKey, personReviewCurrent, relationshipLabels } from '../src/people-evidence.js';
 
@@ -31,7 +32,7 @@ export function markPersonProjection(store, id, projected) {
 export function createPeopleResearch({ store, graph, competitors, snapshot, profileDigest, readSource = readPublicSource }) {
   const project = async id => {
     const saved = store.read(id);
-    try { await graph.sync(saved, competitors[id]); markPersonProjection(store, id, saved); }
+    try { await graph.sync(saved, competitors[id]); markPersonProjection(store, id, saved); markEducationProjection(store, id, saved); }
     catch { /* Decisions are durable. A later graph query repairs the projection. */ }
     return snapshot(id);
   };
@@ -45,7 +46,7 @@ export function createPeopleResearch({ store, graph, competitors, snapshot, prof
       state.personOperations.unshift({ id: randomUUID(), leadId: review.leadId, action: 'source_refresh_requires_review', hash: digest({ runId, reviewId: review.id }), at: now(), graphStatus: 'pending' });
       addActivity(state, 'Published person needs fresh review', `${review.name}; source retrieval failed or a supporting passage changed. Its introduction paths are suspended.`, 'Source reviewer', { leadId: review.leadId });
     }
-    return changed;
+    return checkEducationSources(state, outcomes, runId) || changed;
   };
   const operation = (id, leadId, input, action, values, apply) => {
     if (!uuid(input.requestId) || !input.acknowledged) fail(400, 'Confirm this evidence or relationship decision.', 'person_acknowledgement_required');
@@ -184,5 +185,5 @@ export function createPeopleResearch({ store, graph, competitors, snapshot, prof
     store.mutate(id, state => { const run = runFor(state, leadId, runId); if (run.status === 'running') fail(409, 'Wait for this retrieval to finish.', 'job_running'); if (run.status === 'ready') { run.status = 'dismissed'; run.dismissedAt = now(); } }, revision);
     return snapshot(id);
   };
-  return { start, review, withdraw, connection, revoke, dismiss };
+  return { start, review, withdraw, connection, revoke, dismiss, checkSources: checkExistingReviews };
 }

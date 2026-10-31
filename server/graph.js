@@ -3,15 +3,17 @@ import path from 'node:path';
 import { signalFresh, signalHold } from '../src/market-signals.js';
 import { companyHoldReasons } from '../src/company-evidence.js';
 import { projectedPeople, personDateFresh } from '../src/people-evidence.js';
+import { currentEducationReviews, publicEducationEvidence } from '../src/education-evidence.js';
 import { competitiveReferences, competitorDateFresh } from '../src/competitor-evidence.js';
 import { buyingLinkStatus, buyingWindowActive, publicBuyingEvidence } from '../src/buying-evidence.js';
 
-const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal'];
+const labels = ['Company', 'Person', 'Product', 'Competitor', 'Signal', 'Institution'];
 const relationships = {
   matched_to: ['Company', 'Product'], works_at: ['Person', 'Company'], signal_for: ['Signal', 'Company'],
   competes_with: ['Product', 'Competitor'], previously_employed_at: ['Person', 'Company'],
   contacted_via: ['Company', 'Signal'], replied_to: ['Person', 'Signal'],
   supports_evaluation: ['Signal', 'Signal'], concerns_competitor: ['Signal', 'Competitor'],
+  studied_at: ['Person', 'Institution'],
 };
 
 export async function createGraph(directory) {
@@ -58,8 +60,14 @@ export async function createGraph(directory) {
           }
           for (const { suffix, person: p } of projectedPeople(state, lead)) {
             const personId = prefix + suffix;
-            await node('Person', personId, p.name, businessId, p);
+            const educations = currentEducationReviews(state, lead, p.publicReview?.id).map(publicEducationEvidence);
+            await node('Person', personId, p.name, businessId, { ...p, educations });
             await edge('works_at', personId, companyId, businessId, p.source);
+            for (const education of educations) {
+              const institutionId = prefix + 'institution:' + education.institutionKey;
+              await node('Institution', institutionId, education.institution.name, businessId, { domain: education.institution.domain, source: education.institution.identitySource, identityQuote: education.institution.identityQuote, role: 'Reviewed institution reference; not an account', provenance: 'owner_reviewed_institution' });
+              await edge('studied_at', personId, institutionId, businessId, JSON.stringify(education));
+            }
             if (p.publicReview?.formerEmployer) {
               const employer = p.publicReview.formerEmployer;
               const account = state.leads.find(item => item.domain.toLowerCase().replace(/^www\./, '') === employer.domain);
@@ -113,6 +121,7 @@ export async function createGraph(directory) {
     for (const [type, [from, to]] of Object.entries(relationships)) {
       const rows = await query(`MATCH(a:${from})-[r:${type}]->(b:${to}) WHERE a.businessId=$businessId AND b.businessId=$businessId AND r.businessId=$businessId RETURN a.id AS source,b.id AS target,r.evidence AS evidence`, { businessId });
       edges.push(...rows.map(r => {
+        if (type === 'studied_at') { const proof = JSON.parse(r.evidence); return { ...r, type, evidence: `Owner-reviewed education claim: ${proof.quote}`, educationEvidence: proof }; }
         if (!['supports_evaluation', 'concerns_competitor'].includes(type)) return { ...r, type };
         const proof = JSON.parse(r.evidence);
         return { ...r, type, evidence: `Owner-linked published window: ${proof.startDate} to ${proof.endDate}. Buying intent and displacement remain unconfirmed.`, buyingEvidence: proof };
@@ -147,6 +156,21 @@ export async function createGraph(directory) {
     }
     return paths.slice(0, 100);
   });
+  const educationPaths = (id, clock = Date.now()) => serial(async () => {
+    const personFresh = person => person.reviewCurrent && person.publicReview?.status === 'reviewed' && personDateFresh(person.publicReview.checkedAt, clock) && (!person.publicReview.formerEmployer || personDateFresh(person.publicReview.formerEmployer.checkedAt, clock));
+    const educationFresh = (person, proof) => personFresh(person) && proof.personReviewId === person.publicReview.id && person.educations?.some(item => item.id === proof.id) && personDateFresh(proof.checkedAt, clock) && personDateFresh(proof.institution.checkedAt, clock);
+    const people = (await query('MATCH(p:Person) WHERE p.businessId=$id RETURN p.id AS id,p.data AS data', { id })).map(row => ({ id: row.id, data: JSON.parse(row.data) })).filter(row => personFresh(row.data) && row.data.educations?.some(proof => educationFresh(row.data, proof)));
+    const anchorIds = people.filter(row => row.data.knownConnection).map(row => row.id);
+    if (!anchorIds.length) return [];
+    const personIds = people.map(row => row.id);
+    const rows = await query('MATCH(a:Person)-[ae:studied_at]->(i:Institution)<-[te:studied_at]-(t:Person)-[:works_at]->(c:Company)-[:matched_to]->(p:Product) WHERE a.businessId=$id AND t.businessId=$id AND i.businessId=$id AND c.businessId=$id AND p.businessId=$id AND ae.businessId=$id AND te.businessId=$id AND a.id<>t.id AND a.id IN $anchorIds AND t.id IN $personIds RETURN a.id AS anchorId,a.name AS anchor,a.data AS anchorData,t.id AS personId,t.name AS person,t.data AS targetData,i.id AS institutionId,i.name AS institution,c.name AS company,c.data AS companyData,p.name AS product,ae.evidence AS anchorProof,te.evidence AS targetProof ORDER BY a.id,t.id,i.id LIMIT 200', { id, anchorIds, personIds });
+    return rows.flatMap(row => {
+      const anchor = JSON.parse(row.anchorData), target = JSON.parse(row.targetData), anchorProof = JSON.parse(row.anchorProof), targetProof = JSON.parse(row.targetProof);
+      if (!anchor.knownConnection || !educationFresh(anchor, anchorProof) || !educationFresh(target, targetProof) || anchorProof.institutionKey !== targetProof.institutionKey || row.anchor.toLowerCase() === row.person.toLowerCase()) return [];
+      const evidence = (person, proof) => ({ ...proof, name: person.name, role: person.role, roleSource: person.publicReview.source, roleQuote: person.publicReview.roleQuote });
+      return [{ id: `${row.anchorId}|${row.personId}|${row.institutionId}`, anchor: row.anchor, person: row.person, institution: row.institution, company: row.company, leadId: JSON.parse(row.companyData).leadId, product: row.product, anchorEvidence: evidence(anchor, anchorProof), targetEvidence: evidence(target, targetProof), connection: anchor.knownConnection, relation: 'Person → studied_at → Institution ← studied_at ← Person → works_at → Company → matched_to → Product', interpretation: 'Possible introduction from reviewed public education claims and your relationship attestation. Degrees, attendance, dates, campus identity, overlap, acquaintance, willingness and buying authority are not independently verified.' }];
+    }).slice(0, 100);
+  });
   const buyingPaths = (id, clock = Date.now()) => serial(async () => {
     const evaluations = await query('MATCH(j:Signal)-[r:supports_evaluation]->(s:Signal)-[:signal_for]->(c:Company)-[:matched_to]->(p:Product) WHERE j.businessId=$id AND s.businessId=$id AND c.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN j.data AS job,s.data AS signal,c.name AS company,c.data AS account,p.name AS product,r.evidence AS proof ORDER BY j.id,s.id LIMIT 200', { id });
     const displacements = await query('MATCH(c:Company)<-[:signal_for]-(s:Signal)-[r:concerns_competitor]->(v:Competitor)<-[:competes_with]-(p:Product)<-[:matched_to]-(c) WHERE c.businessId=$id AND s.businessId=$id AND v.businessId=$id AND p.businessId=$id AND r.businessId=$id RETURN s.data AS signal,c.name AS company,c.data AS account,v.name AS competitor,v.data AS competitorData,p.name AS product,r.evidence AS proof ORDER BY s.id,v.id LIMIT 200', { id });
@@ -155,5 +179,5 @@ export async function createGraph(directory) {
       displacements: displacements.flatMap(row => { const proof = JSON.parse(row.proof), review = JSON.parse(row.competitorData).competitiveReview; return buyingWindowActive(proof, clock) && signalFresh(JSON.parse(row.signal), clock) && review?.pages.every(page => competitorDateFresh(page.checkedAt, 24 * 30, clock)) ? [{ ...proof, company: row.company, product: row.product, competitor: row.competitor, leadId: JSON.parse(row.account).leadId, interpretation: 'Published supplier-change context for owner assessment; a replacement opportunity and willingness to switch remain unconfirmed.' }] : []; }).slice(0, 100),
     };
   });
-  return { sync, snapshot, paths, marketPaths, warmPaths, buyingPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
+  return { sync, snapshot, paths, marketPaths, warmPaths, educationPaths, buyingPaths, close: async () => { await queue; await connection.close(); await db.close(); } };
 }

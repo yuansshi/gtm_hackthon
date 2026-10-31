@@ -44,6 +44,7 @@ On restart, interrupted jobs become failed and reserved credits are refunded; jo
 | --- | --- |
 | Company | Researched equipment maker or cited prior employer; businessId, name, source |
 | Person | Published professional identity and role; buying authority may remain unknown |
+| Institution | Auxiliary education reference keyed by reviewed full name and source hostname; not a buyer account |
 | Product | This workspace's product offering, selected families, supplier source |
 | Competitor | Named public competitor or explicitly labeled alternative hypothesis |
 | Signal | Cited application/leadership context or local outreach event |
@@ -55,6 +56,7 @@ On restart, interrupted jobs become failed and reserved credits are refunded; jo
 | Signal → signal_for → Company | Primary publication or product context |
 | Product → competes_with → Competitor | Sourced category overlap or labeled alternative hypothesis |
 | Person → previously_employed_at → Company | Published history, when available |
+| Person → studied_at → Institution | Owner-reviewed public study/degree claim with exact biography and separate institution identity passages |
 | Company → contacted_via → Signal | Exact draft ID and delivery mode; dry run distinctly labeled |
 | Person → replied_to → Signal | Explicitly reported reply with eligible message and matching published respondent; demo/manual provenance retained |
 
@@ -181,3 +183,11 @@ Business-scoped competitor retrieval shares the pinned public-source reader and 
 ## Published buying-window reasoning
 
 Reviewed account-owned signals can form fixed native Signal → Signal evaluation links or Signal → Competitor supplier-change links. Source-acceptance versions, business/account context, quoted window dates, source currency, competitor review and qualification holds constrain eligibility. Public edge proof excludes profile/account binding keys. Native traversal rechecks dates and freshness and caps each result set at 100 paths; owner interpretations remain unverified and never authorize outreach. SQLite decisions are retry-safe and projection-repairable. Graph snapshots check time boundaries and read workspace changes each minute without automatically spending graph credits. Details: [Buying signals](buying-signals.md).
+
+## Shared education reasoning
+
+Education retrieval binds an account-owned biography to an exact current person review and a separate institution identity page. Two public-person-research credits cover the two bounded HTTPS snapshots. Review requires exact person/institution passages and an explicit interpretation of study/attendance or degree. Literal/term checks are guardrails, not independent semantic or identity verification. Full normalized institution name plus canonical source hostname form the identity key; aliases, campuses and institutions with the same name on different domains are not automatically merged.
+
+Native Kuzu persists auxiliary Institution nodes and studied_at edges. A real multi-hop query joins an owner-attested anchor through a shared institution to a different current reviewed person, then its eligible Company → matched_to → Product path. Both edges retain their own passage and institution source. Current person/education IDs, exact-review connection binding, thirty-day freshness and query-time checks constrain results; queries cap output at 100 possible paths. Dates, degree validity, attendance, campus identity, overlap, acquaintance, willingness and buyer authority remain unconfirmed. Education does not enter model drafts, select recipients or satisfy HITL approval.
+
+Profile/account/preference changes during retrieval discard results and refund local reservations once. People or education refreshes suspend lost/failed supporting passages. Supersession, withdrawal and attestation revocation remove path support. Decisions persist before repairable graph projection; restart does not replay network work. Graph context includes person/education validity, and idle checks clear stale snapshots without automatically charging for another query. See [Education introductions](education-introductions.md) for desktop flow, boundaries and the 16 education tests; the complete suite has 244 passing tests.

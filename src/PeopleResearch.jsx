@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ExternalLink, GitBranch, Users } from 'lucide-react';
 import { personReviewCurrent, relationshipLabels } from './people-evidence.js';
 import './people-research.css';
 
+const EducationEvidence = lazy(() => import('./EducationEvidence.jsx'));
 const date = value => new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const link = (url, label) => <a href={url} target="_blank" rel="noreferrer">{label}<ExternalLink size={11}/></a>;
 function useDecision(act) {
@@ -35,6 +36,7 @@ function PersonRecord({ review, account, state, act, busy }) {
     <div className="pe-person-heading"><div><h4>{review.name}</h4><p>{review.role}</p></div><span className={`ar-badge ${current ? 'ar-badge-healthy' : 'ar-badge-review'}`}>{current ? 'Reviewed publication' : review.status === 'reviewed' ? 'Fresh review needed' : review.status}</span></div>
     <small>Reviewed by {review.reviewedBy} · {date(review.reviewedAt)}. Current employment and authority unverified.</small>
     <details><summary>Published role and employment evidence</summary><blockquote>{review.roleQuote}</blockquote>{link(review.source, 'Account-owned role source')}<small>Fetched {date(review.checkedAt)}</small>{review.formerEmployer && <><h5>Former employer: {review.formerEmployer.name}</h5><blockquote>{review.formerEmployer.quote}</blockquote><p>{review.formerEmployer.domain}</p><blockquote>{review.formerEmployer.identityQuote}</blockquote>{link(review.formerEmployer.identitySource, 'Employer-owned identity source')}<small>Employment dates and overlap are unknown.</small></>}</details>
+    <Suspense fallback={<p>Loading education evidence…</p>}><EducationEvidence person={review} account={account} state={state} act={act} busy={busy}/></Suspense>
     {['reviewed', 'needs_review'].includes(review.status) && <>
       {connection ? <div className="pe-attestation"><strong>Your local connection attestation</strong><p>{relationshipLabels[connection.relationship]} · {date(connection.attestedAt)}</p>{connection.note && <p>{connection.note}</p>}<small>Self-reported; introduction willingness is unconfirmed. {current ? '' : 'This evidence no longer supports warm paths.'}</small></div> : <details><summary>I know this person</summary><form onSubmit={save}>
         <label>Relationship<select value={relationship} onChange={event => { setRelationship(event.target.value); setAck(false); }}>{Object.entries(relationshipLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -72,7 +74,7 @@ export function PeopleResearch({ account, state, act, busy }) {
   };
   return <section className="pe-panel ar-detail-section">
     <div className="ar-detail-title"><h3><Users size={15}/>Published people & introductions</h3><span className="ar-badge">{reviews.filter(review => personReviewCurrent(review, account)).length} current reviews</span></div>
-    <p>Review a published role, then optionally attest a person you know. Shared employment can reveal a possible introduction. Mailbox selection and outreach stay separate.</p>
+    <p>Review a published role and optional education, then attest a person you know. Shared employers or institutions can suggest an introduction. Mailbox selection and outreach stay separate.</p>
     {state.peopleFixture && <p className="pe-warning">Test fixture only · synthetic people and employment evidence</p>}
     <details className="pe-research"><summary>Research a published person</summary>
       <form onSubmit={fetchSources}>
