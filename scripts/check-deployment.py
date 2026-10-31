@@ -55,6 +55,7 @@ def copy_offline_fixture(source, target):
 # Passed on stdin to a disposable container; not shipped in the runtime image.
 COPY_VOLUME = r"""
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const source=process.env.GTM_SMOKE_COPY_SOURCE||'/source',target=process.env.GTM_SMOKE_COPY_TARGET||'/data';
 function manifest(root){
  const records=[];
  function walk(relative=''){
@@ -67,9 +68,11 @@ function manifest(root){
  }
  walk();assert.ok(records.some(r=>r.path==='workspace.sqlite'));assert.ok(records.some(r=>r.path==='knowledge.kuzu'));return records;
 }
-assert.notEqual(process.getuid(),0);assert.deepEqual(fs.readdirSync('/data'),[],'Restore only into an empty separate volume.');
-const before=manifest('/source');fs.cpSync('/source','/data',{recursive:true,errorOnExist:true,force:false,preserveTimestamps:true});
-assert.deepEqual(manifest('/data'),before);assert.deepEqual(manifest('/source'),before);
+assert.notEqual(process.getuid(),0);assert.deepEqual(fs.readdirSync(target),[],'Restore only into an empty separate volume.');
+const before=manifest(source);
+// The mount point already exists; each child destination must still be new.
+for(const name of fs.readdirSync(source))fs.cpSync(path.join(source,name),path.join(target,name),{recursive:true,errorOnExist:true,force:false,preserveTimestamps:true});
+assert.deepEqual(manifest(target),before);assert.deepEqual(manifest(source),before);
 console.log('Offline separate-volume copy verified: '+before.length+' entries; complete file hashes and permissions match.');
 """
 
