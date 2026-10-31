@@ -121,3 +121,24 @@ test('server summary never reports over-100% conversion or attributes a manual s
   state.leads.forEach(row => { row.events = row.events.filter(event => event.stage !== 'Contacted'); });
   assert.equal(metrics(state, { asOf }).replyRate, null);
 });
+
+test('value proposition cohorts use immutable saved briefs, separate the same variant, and never infer old focus from copy',()=>{
+  const state=fixture();state.drafts=[
+    draft('fit','a','2026-10-25T12:00:00Z','accepted',{messageBrief:{valueProposition:'application_fit'}}),
+    draft('supplier','b','2026-10-25T12:00:00Z','accepted',{messageBrief:{valueProposition:'supplier_qualification'}}),
+    draft('legacy','c','2026-10-25T12:00:00Z','accepted',{body:'Assess application fit before proposing a component.',messageBrief:{audience:'team'}}),
+    draft('unknown','d','2026-10-25T12:00:00Z','accepted',{messageBrief:{valueProposition:'unrecognized'}}),
+  ];state.leads[0].events=[event('Contacted','2026-10-25T12:00:00Z','live'),event('Replied','2026-10-26T12:00:00Z','user_reported',{draftId:'fit'})];
+  const data=analyzePipeline(state,{asOf}),fit=data.experiments.find(row=>row.valueProposition==='application_fit'),supplier=data.experiments.find(row=>row.valueProposition==='supplier_qualification'),old=data.experiments.find(row=>row.valueProposition===null);
+  assert.equal(data.experiments.length,3);assert.equal(fit.messages,1);assert.equal(fit.replies,1);assert.equal(supplier.messages,1);assert.equal(supplier.replies,0);assert.equal(old.messages,2);assert.equal(old.valuePropositionLabel,'Unrecorded');assert.equal(old.replies,0);
+});
+test('value proposition observations preserve mode, step, method, account and time filters without duplicating linked replies',()=>{
+  const state=fixture();state.drafts=[
+    draft('fit','a','2026-10-25T12:00:00Z','accepted',{messageBrief:{valueProposition:'application_fit'}}),
+    draft('followup','a','2026-10-27T12:00:00Z','accepted',{sequenceStep:1,modelMetadata:{model:'fixture'},messageBrief:{valueProposition:'engineering_collaboration'}}),
+    draft('dry','b','2026-10-26T12:00:00Z','simulated',{messageBrief:{valueProposition:'application_fit'}}),
+    draft('old','d','2026-09-01T12:00:00Z','accepted',{messageBrief:{valueProposition:'application_fit'}}),
+  ];state.leads[0].events.push(event('Replied','2026-10-28T12:00:00Z','user_reported',{draftId:'followup'}));
+  const data=analyzePipeline(state,{asOf,days:7,accountIds:['a']});assert.equal(data.experiments.length,2);assert.equal(data.experiments.find(row=>row.valueProposition==='application_fit').replies,0);assert.equal(data.experiments.find(row=>row.valueProposition==='engineering_collaboration').replies,1);
+  const dry=analyzePipeline(state,{asOf,days:7,mode:'dry_run'});assert.equal(dry.experiments.length,1);assert.equal(dry.experiments[0].messages,1);assert.equal(dry.experiments[0].replies,0);assert.equal(dry.experiments[0].mode,'dry_run');
+});

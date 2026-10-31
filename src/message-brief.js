@@ -6,6 +6,13 @@ export const audiences = {
   leadership: { label: 'Business leadership', greeting: 'management team', focus: 'scope, qualification effort and commercial requirements' },
 };
 export const tones = { consultative: 'Consultative', direct: 'Direct', technical: 'Technical' };
+export const valuePropositions = {
+  application_fit: { label: 'Application fit', focus: 'Assess application fit before proposing a component.' },
+  supplier_qualification: { label: 'Supplier qualification', focus: 'Explore the requirements for qualifying an additional supplier.' },
+  engineering_collaboration: { label: 'Engineering collaboration', focus: 'Review drawings and requirements together before proposing a component.' },
+};
+// A writing hypothesis, never an inferred capability or a retrospective attribution.
+export const recordedValueProposition = draft => Object.hasOwn(valuePropositions, draft?.messageBrief?.valueProposition) ? draft.messageBrief.valueProposition : null;
 export const callsToAction = {
   technical_review: { label: 'Review technical requirements', text: 'Could we review the application requirements and a drawing to assess fit?' },
   supplier_process: { label: 'Understand supplier qualification', text: 'What does your process for qualifying an additional supplier require?' },
@@ -13,8 +20,8 @@ export const callsToAction = {
   fit_call: { label: 'Request a short fit discussion', text: 'Would a 15-minute technical fit discussion be useful?' },
 };
 export const wordLimits = [80, 120, 180, 240];
-export const defaultMessageBrief = { audience: 'team', tone: 'consultative', maxWords: 180, cta: 'technical_review' };
-export const validMessageBrief = brief => !!brief && typeof brief === 'object' && !Array.isArray(brief) && Object.keys(brief).sort().join(',') === 'audience,cta,maxWords,tone' && Object.hasOwn(audiences, brief.audience) && Object.hasOwn(tones, brief.tone) && wordLimits.includes(brief.maxWords) && Object.hasOwn(callsToAction, brief.cta);
+export const defaultMessageBrief = { audience: 'team', tone: 'consultative', maxWords: 180, cta: 'technical_review', valueProposition: 'application_fit' };
+export const validMessageBrief = brief => !!brief && typeof brief === 'object' && !Array.isArray(brief) && ['audience,cta,maxWords,tone','audience,cta,maxWords,tone,valueProposition'].includes(Object.keys(brief).sort().join(',')) && Object.hasOwn(audiences, brief.audience) && Object.hasOwn(tones, brief.tone) && wordLimits.includes(brief.maxWords) && Object.hasOwn(callsToAction, brief.cta) && (!Object.hasOwn(brief,'valueProposition') || Object.hasOwn(valuePropositions,brief.valueProposition));
 // Count body words, excluding URLs and bracketed citation numbers. Delivery footers are separate.
 export const bodyWordCount = body => (String(body || '').replace(/https?:\/\/[^\s<>]+/g, '').replace(/\[\d+\]/g, '').match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu) || []).length;
 export function assessMessageBrief(draft) {

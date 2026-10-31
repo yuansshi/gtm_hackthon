@@ -11,7 +11,8 @@ import { createModelProvider } from '../server/model.js';
 import { messageHash } from '../server/email-delivery.js';
 import { researchCatalog } from '../server/catalog.js';
 import { scoreAccount } from '../server/evidence.js';
-import { audiences, tones, callsToAction, defaultMessageBrief, bodyWordCount, assessMessageBrief } from '../src/message-brief.js';
+import { audiences, tones, callsToAction, valuePropositions, defaultMessageBrief, bodyWordCount, assessMessageBrief } from '../src/message-brief.js';
+import { checkedMessageBrief, messageBriefSchema } from '../server/message-brief.js';
 const graph = { sync: async () => {}, snapshot: async () => ({}), paths: async () => [] };
 const brief = overrides => ({ ...defaultMessageBrief, ...overrides });
 async function setup(t, model) {
@@ -95,7 +96,7 @@ test('each brief field changes dry/live message hashes while legacy approval has
   const base={body:'Body',subject:'Subject',recipient:'buyer@fixture.test',version:1,profileHash:'profile',businessId:'allco',channel:'email',sequenceStep:0};
   assert.equal(messageHash(base),messageHash({...base,messageBrief:undefined}));
   for(const mode of ['dry_run','live']){const d={...base,messageBrief:brief(),approvedDeliveryMode:mode,approvedSenderHash:'sender',approvedLiveMessage:{body:'Body + footer'}};
-    for(const patch of [{audience:'engineering'},{tone:'technical'},{maxWords:120},{cta:'right_contact'}])assert.notEqual(messageHash(d),messageHash({...d,messageBrief:brief(patch)}));}
+    for(const patch of [{audience:'engineering'},{tone:'technical'},{maxWords:120},{cta:'right_contact'},{valueProposition:'supplier_qualification'}])assert.notEqual(messageHash(d),messageHash({...d,messageBrief:brief(patch)}));}
 });
 test('existing templates, approvals and dispatched receipts stay compatible without inventing a saved brief', async t => {
   const { store, service }=await setup(t); const id=service.draft('allco','elliott');const d=store.read('allco').drafts[0];assert.equal(d.messageBrief,undefined);assert.equal(assessMessageBrief(d).legacy,true);
@@ -115,8 +116,10 @@ test('real model SDK fixture honors brief context and completed-request replay r
   const {store,service}=await setup(t,model), input={channel:'email',variant:'A',sequenceStep:0,messageBrief:brief({cta:'right_contact'}),requestId:randomUUID(),acknowledgedExternalProcessing:true,revision:store.read('allco').revision};
   const result=await service.draftWithModel('allco','elliott',input);assert.equal(result.drafts[0].messageBrief.cta,'right_contact');assert.equal(assessMessageBrief(result.drafts[0]).valid,true);assert.equal(requests,1);
   assert.equal(JSON.parse(wire.input[0].content).context.messageBrief.callToAction,callsToAction.right_contact.text);assert.match(wire.instructions,/callToAction exactly once/);
+  assert.equal(JSON.parse(wire.input[0].content).context.messageBrief.valueProposition,'application_fit');assert.equal(JSON.parse(wire.input[0].content).context.messageBrief.valuePropositionFocus,valuePropositions.application_fit.focus);assert.match(wire.instructions,/messaging hypothesis/);
   await service.draftWithModel('allco','elliott',input);assert.equal(requests,1);assert.equal(store.read('allco').wallet.credits,98);
   await assert.rejects(service.draftWithModel('allco','elliott',{...input,messageBrief:brief({cta:'fit_call'})}),{code:'request_id_conflict'});assert.equal(requests,1);
+  await assert.rejects(service.draftWithModel('allco','elliott',{...input,messageBrief:brief({valueProposition:'supplier_qualification'})}),{code:'request_id_conflict'});assert.equal(requests,1);
 });
 test('authenticated HTTP creates/edits strict briefs, rejects injected fields and preserves business scope', async t => {
   const {store,service}=await setup(t),server=createApp({store,service}).listen(0,'127.0.0.1');t.after(()=>new Promise(resolve=>server.close(resolve)));await new Promise(resolve=>server.once('listening',resolve));
@@ -124,7 +127,37 @@ test('authenticated HTTP creates/edits strict briefs, rejects injected fields an
   const request=(url,body,method='POST')=>fetch(root+'/api/businesses/'+url,{method,headers:{'Content-Type':'application/json',Cookie:cookie,'x-csrf-token':csrf},body:JSON.stringify(body)});
   assert.equal((await request('allco/leads/elliott/drafts',{channel:'email',variant:'A',sequenceStep:0,messageBrief:{...brief(),approved:true}})).status,400);
   const result=await request('allco/leads/elliott/drafts',{channel:'email',variant:'A',sequenceStep:0,messageBrief:brief()});assert.equal(result.status,200);const state=await result.json(),d=state.drafts[0];
+  assert.equal(d.messageBrief.valueProposition,'application_fit');
+  assert.equal((await request('allco/drafts/'+d.id,{version:d.version,messageBrief:brief({valueProposition:'guaranteed_savings'})},'PATCH')).status,400);
   assert.equal((await request('huasheng/drafts/'+d.id,{recipient:d.recipient,subject:d.subject,body:d.body,version:d.version,messageBrief:brief()},'PATCH')).status,404);
-  assert.equal((await request('allco/drafts/'+d.id,{recipient:d.recipient,subject:d.subject,body:d.body,version:d.version,messageBrief:brief({audience:'engineering'})},'PATCH')).status,200);
-  assert.equal(store.read('allco').drafts[0].messageBrief.audience,'engineering');assert.equal(store.read('huasheng').drafts.length,0);
+  assert.equal((await request('allco/drafts/'+d.id,{recipient:d.recipient,subject:d.subject,body:d.body,version:d.version,messageBrief:brief({audience:'engineering',valueProposition:'supplier_qualification'})},'PATCH')).status,200);
+  assert.equal(store.read('allco').drafts[0].messageBrief.audience,'engineering');assert.equal(store.read('allco').drafts[0].messageBrief.valueProposition,'supplier_qualification');assert.equal(store.read('huasheng').drafts.length,0);
+});
+
+test('all value proposition hypotheses shape qualified source copy across both businesses, channels and variants',async t=>{
+  const {store,draft}=await setup(t);
+  for(const business of ['allco','huasheng'])for(const channel of ['email','linkedin'])for(const variant of ['A','B'])for(const step of [0,1,2])for(const [valueProposition,option] of Object.entries(valuePropositions)){
+    const id=draft(business,channel,variant,step,brief({valueProposition})),d=store.read(business).drafts.find(x=>x.id===id);
+    assert.equal(d.messageBrief.valueProposition,valueProposition);assert.ok(d.body.includes(option.focus));assert.equal(assessMessageBrief(d).valid,true);assert.equal(d.status,'draft');assert.equal(d.approvedHash,null);assert.match(d.body,/subject to technical review/);assert.ok(d.sources.includes(researchCatalog[0].source));
+  }
+  assert.equal(store.read('allco').wallet.credits,100);
+});
+test('four-field saved briefs and hashes stay exact without retroactively inventing a value proposition',async t=>{
+  const {store,service,draft}=await setup(t);const {valueProposition,...old}=brief();
+  assert.deepEqual(checkedMessageBrief(old),old);assert.deepEqual(messageBriefSchema.parse(old),old);
+  const id=draft('allco','email','A',0,old);let d=store.read('allco').drafts[0];assert.deepEqual(d.messageBrief,old);
+  service.approveDraft('allco',id,true,d.version);const approved=store.read('allco').drafts[0];const hash=approved.approvedHash;
+  assert.equal(draft('allco','email','A',0,old),id);assert.equal(store.read('allco').drafts[0].approvedHash,hash);
+  await service.simulateSend('allco',id);assert.deepEqual(store.read('allco').drafts[0].messageBrief,old);assert.equal(store.read('allco').drafts[0].approvedHash,hash);
+});
+test('unknown, injected and undefined value propositions cannot mutate or spend, while absent legacy focus remains supported',async t=>{
+  const {store,draft}=await setup(t),before=store.read('allco');
+  for(const valueProposition of ['cost_savings','__proto__','toString','',null,undefined,{}])assert.throws(()=>draft('allco','email','A',0,brief({valueProposition})),{code:'invalid_message_brief'});
+  assert.deepEqual(store.read('allco'),before);
+});
+test('changing value proposition alone revokes exact approval, and settled receipts cannot be retagged',async t=>{
+  const {store,service,draft}=await setup(t),id=draft();let d=store.read('allco').drafts[0];service.approveDraft('allco',id,true,d.version);const oldHash=store.read('allco').drafts[0].approvedHash;
+  service.editDraft('allco',id,{messageBrief:brief({valueProposition:'engineering_collaboration'})},d.version);d=store.read('allco').drafts[0];assert.equal(d.version,2);assert.equal(d.status,'draft');assert.equal(d.approvedHash,null);assert.equal(d.approvedDeliveryMode,null);
+  service.approveDraft('allco',id,true,d.version);assert.notEqual(store.read('allco').drafts[0].approvedHash,oldHash);await service.simulateSend('allco',id);
+  const receipt=store.read('allco').drafts[0];assert.throws(()=>service.editDraft('allco',id,{messageBrief:brief()},receipt.version),{code:'draft_locked'});assert.deepEqual(store.read('allco').drafts[0],receipt);
 });

@@ -29,7 +29,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 
 ## What is real and what is simulated
 
-New desktop outreach drafts save a [message brief](docs/message-brief.md): audience, tone, body-word limit and exact call to action. Templates and optional model generation use it. Review shows the saved brief and word count; objective constraints gate approval, and changing the brief requires a new version and human review. Audience selection does not verify a buyer’s role. Existing receipts retain their original approval behavior.
+New desktop outreach drafts save a [message brief](docs/message-brief.md): audience, tone, value-proposition focus, body-word limit and exact call to action. Templates and optional model generation use it. Review shows the saved brief and word count; objective constraints gate approval, and changing the brief requires a new version and human review. Audience selection does not verify a buyer’s role; the value proposition is a messaging hypothesis, not an established advantage. Pipeline Analytics separates immutable outbound observations by their saved focus and provides a table-only focus filter. Old messages remain Unrecorded. Existing receipts retain their original approval behavior.
 
 | Capability | Current implementation |
 | --- | --- |

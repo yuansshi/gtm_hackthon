@@ -1,3 +1,4 @@
+import { valuePropositions, recordedValueProposition } from './message-brief.js';
 // Account-level milestone reach. Scope and denominators are shared by all views.
 export const analyticsModes = ['all', 'user_reported', 'dry_run', 'live'];
 export const milestoneStages = ['Contacted', 'Replied', 'Meeting booked', 'RFQ received', 'Closed won'];
@@ -57,13 +58,14 @@ export function analyzePipeline(state, { accountIds, days = 0, mode = 'all', asO
   const groups = new Map();
   for (const draft of outbound) {
     const method = draft.modelMetadata ? 'AI draft' : 'Source template';
-    const key = JSON.stringify([draft.channel, draft.variant, draft.sequenceStep, method, draft.status]);
-    const group = groups.get(key) || { channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, method, mode: draft.status === 'simulated' ? 'dry_run' : 'live', draftIds: [], accounts: new Set(), replies: new Set() };
+    const valueProposition = recordedValueProposition(draft);
+    const key = JSON.stringify([draft.channel, draft.variant, draft.sequenceStep, method, draft.status, valueProposition]);
+    const group = groups.get(key) || { channel: draft.channel, variant: draft.variant, sequenceStep: draft.sequenceStep, method, valueProposition, valuePropositionLabel: valuePropositions[valueProposition]?.label || 'Unrecorded', mode: draft.status === 'simulated' ? 'dry_run' : 'live', draftIds: [], accounts: new Set(), replies: new Set() };
     group.draftIds.push(draft.id); group.accounts.add(draft.leadId);
     if (linkedReplyIds.has(draft.id)) group.replies.add(draft.leadId);
     groups.set(key, group);
   }
-  const experiments = [...groups.values()].map(group => ({ ...group, messages: group.draftIds.length, accounts: group.accounts.size, replies: group.replies.size, replyRate: group.accounts.size ? group.replies.size / group.accounts.size : null })).sort((a, b) => a.channel.localeCompare(b.channel) || a.variant.localeCompare(b.variant) || a.sequenceStep - b.sequenceStep || a.mode.localeCompare(b.mode));
+  const experiments = [...groups.values()].map(group => ({ ...group, messages: group.draftIds.length, accounts: group.accounts.size, replies: group.replies.size, replyRate: group.accounts.size ? group.replies.size / group.accounts.size : null })).sort((a, b) => a.channel.localeCompare(b.channel) || a.variant.localeCompare(b.variant) || a.sequenceStep - b.sequenceStep || a.mode.localeCompare(b.mode) || a.valuePropositionLabel.localeCompare(b.valuePropositionLabel));
   const segments = [...new Set(accounts.map(account => JSON.stringify([account.industry || 'Unknown industry', account.fit?.tier || 'Unrated'])))].map(key => {
     const [industry, tier] = JSON.parse(key);
     const groupIds = new Set(accounts.filter(account => (account.industry || 'Unknown industry') === industry && (account.fit?.tier || 'Unrated') === tier).map(account => account.id));
