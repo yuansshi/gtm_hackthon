@@ -15,7 +15,7 @@ npm start
 
 Open **http://127.0.0.1:3001**. The Express server serves both the API and production UI. For UI development, run `npm run server` and `npm run dev` in two terminals; Vite proxies `/api` to port 3001. `npm run preview` also requires the backend.
 
-The supplied `.env.example` contains dummy Band and Flexprice placeholders. The application does not send requests to Band or Flexprice or infer a verified connection from the presence of a key. AI, Tavily prospect search, and Hunter contact research are disabled by default. Do not put personal keys here.
+The supplied `.env.example` contains dummy Band and Flexprice placeholders. Band remains a local demo. Flexprice is disabled by default; an optional project-only adapter requires per-business identity and rate-contract confirmation before metering. Key presence alone never verifies a connection. AI, Tavily prospect search, and Hunter contact research are disabled by default. Do not put personal keys here.
 
 ## Try the five-module flow
 
@@ -41,7 +41,7 @@ Open **Billing & credits** in the sidebar or click the header balance to reload 
 | Drafting | Source-grounded templates by default; optional credential-gated OpenAI structured drafts with required account/supplier citations, proposed claim review, and actual returned token usage |
 | Outreach | Server-enforced approval and local dry run; no email/LinkedIn provider connected |
 | Agents / Band | Local role-based steps; no independently running Band agents, @mentions, tokens, or cost telemetry |
-| Billing / Flexprice | Atomic local demo credit ledger; no external wallet, billing event ingestion, or real charge |
+| Billing / Flexprice | Local demo reloads plus optional project wallet verification, metered usage outbox, reconciliation and external credit gates; fixtures checked, live project unverified; no payment collected |
 | Security scans | npm audit and GitHub verify pass; Snyk workflow stops at the missing project-token check before SAST/SCA |
 
 Public-page research shares one DNS-pinned HTTPS reader across curated accounts, website intake/refresh, prospect search and market signals. Curated sources retain their host allowlist. See [Source retrieval](docs/source-retrieval.md) for redirect, TLS, byte and deadline limits.
@@ -207,3 +207,12 @@ Verification: 144 tests pass, including 23 company tests; build and npm audit pa
 In **Accounts → Contacts → Published people & introductions**, fetch an account-owned role page and optionally a former-employer identity page for two local credits. Review exact name/role and employment passages before saving a graph-only person. Former employers use an explicitly reviewed website domain reference; legacy name-only employers do not support warm paths. An optional local connection attestation binds to that exact person review. Relationship notes never enter model drafting or graph projection.
 
 **Knowledge graph** now runs native current/former-employer traversals to eligible account/product matches, with source passages and explicit uncertainty about dates, overlap, acquaintance and willingness. Source change/failure, expiry, supersession, withdrawal or attestation revocation removes path support. New source checks do not automatically renew a review. Recipients, original published/vendor people, messages and sales history remain unchanged. Education paths and confirmed buying-cycle reasoning remain incomplete. See [People and introductions](docs/people-introductions.md).
+
+
+## Optional project Flexprice
+
+The current dummy configuration makes no provider requests. Configure designated PROJECT_FLEXPRICE_* fields from .env.example for an existing project customer/prepaid wallet, a SUM(credits) meter on gtm_credits_consumed, and its matching price. Each business needs distinct customer, external customer and wallet IDs. In **Billing & credits → Project Flexprice**, confirm the mapping and credit-price contract. The adapter checks the customer, environment, active prepaid wallet and an explicitly uncached real-time balance. Keys remain server-side; generic or personal Flexprice variables are ignored.
+
+New credit-consuming actions check both the existing local demo budget and external wallet. Successful settlement queues one persisted event with a stable ID, operation type, credit units and opaque per-lead allocation. HTTP 202 acceptance is separate from matched meter/price processing and a new wallet check. One operation per business remains outstanding until reconciliation. Unknown ingestion never reposts automatically; an explicit same-ID retry requires not-found lookup and a bounded event age. Interrupted work refunds without replaying underlying actions. Billing transport progress preserves valid graph snapshots; actual graph-input changes invalidate them.
+
+Demo reloads cannot fund the provider wallet or bypass its gate. No historic demo activity is backfilled, no provider wallet is topped up, and no payment is collected here. Dry runs are labeled outreach_dry_run, never Outreach Sent. Live project ingestion, actual meter/price amounts, cross-service atomic reservations, production user authorization and payment fulfillment remain unverified or incomplete. Setup, event definitions and validation: [Flexprice integration](docs/flexprice-integration.md).

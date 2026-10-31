@@ -55,11 +55,29 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   app.get('/api/status', (req, res) => res.json({ mode: 'demo', graph: 'Kuzu', delivery: 'dry_run', costs, stages: pipelineStages,
     assistant: service.assistantStatus(), enrichment: service.enrichmentStatus(), prospectSearch: service.prospectSearchStatus(),
-    integrations: ['Band Desktop', 'Flexprice', 'LLM', 'Enrichment vendor', 'Prospect search', 'Email / LinkedIn delivery'].map(name => name === 'Prospect search' ? { ...service.prospectSearchStatus(), name: 'Tavily', connected: !!service.prospectSearchStatus().verifiedAt } : name === 'Enrichment vendor' ? { ...service.enrichmentStatus(), name: 'Hunter', connected: !!service.enrichmentStatus().verifiedAt } : name === 'LLM' ? { ...service.assistantStatus(), name, connected: !!service.assistantStatus().verifiedAt } : { name, connected: false, status: 'Not connected' }) }));
+    integrations: ['Band Desktop', 'Flexprice', 'LLM', 'Enrichment vendor', 'Prospect search', 'Email / LinkedIn delivery'].map(name => name === 'Flexprice' ? { ...service.billingStatus(), name } : name === 'Prospect search' ? { ...service.prospectSearchStatus(), name: 'Tavily', connected: !!service.prospectSearchStatus().verifiedAt } : name === 'Enrichment vendor' ? { ...service.enrichmentStatus(), name: 'Hunter', connected: !!service.enrichmentStatus().verifiedAt } : name === 'LLM' ? { ...service.assistantStatus(), name, connected: !!service.assistantStatus().verifiedAt } : { name, connected: false, status: 'Not connected' }) }));
   app.param('business', (req, res, next, id) => { try { assertBusiness(id); next(); } catch (e) { next(e); } });
   const base = '/api/businesses/:business';
+  app.use(base, async (req, res, next) => {
+    try {
+      const path = req.path;
+      const charged = req.method === 'POST' && (
+        ['/discovery', '/source-intakes', '/prospect-searches', '/graph/query'].includes(path) ||
+        /^\/leads\/[^/]+\/(?:enrich|people-research|signal-checks|company\/lookup|contacts\/(?:search|verify))$/.test(path) ||
+        /^\/drafts\/[^/]+\/simulate$/.test(path) ||
+        (path === '/assistant/intake' && req.body?.mode === 'model') ||
+        (/^\/leads\/[^/]+\/drafts$/.test(path) && req.body?.generation === 'model')
+      );
+      if (charged) await service.prepareBilling(req.params.business, { path, requestId: req.body?.requestId });
+      next();
+    } catch (error) { next(error); }
+  });
   const view = (req, res) => res.json(service.snapshot(req.params.business));
   app.get(base, view);
+  const billingConsent = z.object({ revision, expectedConsentVersion: revision, bindingHash: z.string().length(64), acknowledged: z.boolean(), acknowledgedRates: z.boolean() }).strict();
+  app.post(base + '/billing/flexprice/connect', async (req, res) => res.json(await service.connectBilling(req.params.business, parse(billingConsent, req.body))));
+  app.post(base + '/billing/flexprice/pause', (req, res) => res.json(service.pauseBilling(req.params.business, parse(z.object({ revision, expectedConsentVersion: revision, acknowledged: z.boolean() }).strict(), req.body))));
+  app.post(base + '/billing/flexprice/sync', async (req, res) => res.json(await service.syncBilling(req.params.business, parse(z.object({ revision, expectedConsentVersion: revision, bindingHash: z.string().length(64), acknowledged: z.boolean(), retryEventId: z.string().uuid().nullable(), acknowledgedRetry: z.boolean() }).strict(), req.body))));
   const reloadSchema = z.object({ packId: z.enum(['starter', 'growth', 'scale', 'custom']), customCredits: z.number().int().min(1).max(100000).optional(), requestId: z.string().uuid() }).strict();
   app.post(base + '/billing/reloads', (req, res) => {
     const data = parse(reloadSchema, req.body);
@@ -159,7 +177,7 @@ export function createApp({ service, store, accessToken = '', allowedOrigins = [
   });
   app.post(base + '/graph/query', async (req, res) => res.json(await service.graphView(req.params.business)));
   app.post(base + '/credits', (req, res) => { const data = parse(reloadSchema, req.body); const receipt = reloadCredits(store, req.params.business, data); res.json({ ...service.snapshot(req.params.business), reloadReceipt: receipt }); });
-  app.post(base + '/reset', (req, res) => { const id = req.params.business; const current = store.read(id); if (current.jobs.some(j => j.status === 'running') || current.assistantRuns?.some(r => r.status === 'running') || current.enrichmentRuns?.some(r => ['running', 'pending'].includes(r.status))) throw new AppError(409, 'Finish or close pending research, assistant, and contact work before resetting.', 'job_running'); store.mutate(id, s => { const nextRevision = s.revision; const wallet = s.wallet; const contactSuppressions = s.contactSuppressions || []; const companyRestrictions=s.companyRestrictions||[]; Object.assign(s, initialRuntime(id), { wallet, contactSuppressions, companyRestrictions, revision: nextRevision, profileImported: true }); addActivity(s, 'Campaign workspace reset', 'Profile and campaign records reset. Credit balance, billing history, and provider processing restrictions were retained.'); }); view(req, res); });
+  app.post(base + '/reset', (req, res) => { const id = req.params.business; const current = store.read(id); if (current.jobs.some(j => j.status === 'running') || current.assistantRuns?.some(r => r.status === 'running') || current.enrichmentRuns?.some(r => ['running', 'pending'].includes(r.status))) throw new AppError(409, 'Finish or close pending research, assistant, and contact work before resetting.', 'job_running'); store.mutate(id, s => { const nextRevision = s.revision; const wallet = s.wallet; const contactSuppressions = s.contactSuppressions || []; const companyRestrictions=s.companyRestrictions||[]; const flexprice=s.flexprice; Object.assign(s, initialRuntime(id), { wallet, contactSuppressions, companyRestrictions, ...(flexprice ? { flexprice } : {}), revision: nextRevision, profileImported: true }); addActivity(s, 'Campaign workspace reset', 'Profile and campaign records reset. Credit balance, billing history, and provider processing restrictions were retained.'); }); view(req, res); });
   app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found.', code: 'not_found' }));
   if (serveStatic) { app.use(express.static(path.resolve('dist'))); app.get('/{*path}', (req, res) => res.sendFile(path.resolve('dist/index.html'))); }
   app.use((error, req, res, next) => { const status = error.status || 500; res.status(status).json({ error: status >= 500 ? 'The server could not complete this action. Check the local server log.' : error.message, code: error.code || 'server_error' }); if (status >= 500) console.error(error); });

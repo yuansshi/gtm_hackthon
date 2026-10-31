@@ -101,7 +101,7 @@ export function createContactEnrichment({store,graph,competitors,provider,snapsh
     if(run.status!=='pending')throw new AppError(409,'Only a pending verification can be closed locally.','enrichment_in_progress');
     store.mutate(id,state=>{
       const current=runFor(state,runId,leadId);current.status='cancelled';current.completedAt=now();current.error='Closed locally. Reserved local credits refunded; Hunter processing and charges are not cancelled.';
-      const entry=state.wallet.ledger.find(entry=>entry.id===current.reservation);if(entry.status==='reserved'){state.wallet.credits+=entry.credits;entry.status='refunded';}entry.externalStatus='provider_unknown';
+      const entry=state.wallet.ledger.find(entry=>entry.id===current.reservation);store.settleUsageInState(state,entry,false);entry.externalStatus='provider_unknown';
       addActivity(state,'Pending vendor check closed',`${leadFor(state,leadId).name}; local credit reservation refunded. This does not cancel vendor processing or charges.`,'You',{leadId,enrichmentRunId:runId});
     },input.revision);return snapshot(id);
   };

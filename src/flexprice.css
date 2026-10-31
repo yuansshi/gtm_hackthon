@@ -1,0 +1,29 @@
+.fp-billing { margin: 22px 0; }
+.fp-billing h2 { display: flex; align-items: center; gap: 8px; }
+.fp-body { padding: 0 22px 22px; font-size: 13px; line-height: 1.6; }
+.fp-notice { border-left: 3px solid #b98532; padding: 12px 14px; background: #fff9ee; color: #805b24; }
+.fp-metrics { display: grid; grid-template-columns: 1.1fr .8fr 1.2fr; gap: 24px; padding: 18px 0; }
+.fp-metrics > div { border-right: 1px solid var(--line); padding-right: 18px; }
+.fp-metrics > div:last-child { border: 0; }
+.fp-metrics span, .fp-metrics small { display: block; color: var(--muted); font-size: 12px; }
+.fp-metrics strong { display: block; margin: 6px 0; font-size: 24px; font-weight: 650; overflow-wrap: anywhere; }
+.fp-metrics .fp-date { font-size: 15px; margin: 11px 0; }
+.fp-billing summary { font-weight: 600; padding: 8px 0; cursor: pointer; }
+.fp-mapping { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 24px; margin: 10px 0; }
+.fp-mapping dt { font-size: 11px; color: var(--muted); }
+.fp-mapping dd { margin: 0; overflow-wrap: anywhere; }
+.fp-confirm, .fp-sync { margin: 16px 0; border-top: 1px solid var(--line); padding-top: 16px; }
+.fp-confirm h3 { margin: 0 0 12px; font-size: 14px; }
+.fp-confirm label, .fp-sync label, .fp-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin: 10px 0; }
+.fp-billing input[type=checkbox] { flex-shrink: 0; margin: 4px 0 0; }
+.fp-confirm .button, .fp-sync > .button { margin-top: 7px; }
+.fp-sync .fp-field { display: grid; gap: 5px; }
+.fp-field select { max-width: 550px; width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+.fp-error { padding: 12px; border: 1px solid #e7bcbc; color: #9c3131; background: #fff5f4; border-radius: 5px; }
+.fp-boundary { color: var(--muted); font-size: 12px; }
+.fp-billing table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 12px; }
+.fp-billing th, .fp-billing td { padding: 12px 20px; border-top: 1px solid var(--line); vertical-align: top; }
+.fp-billing th { background: #f8f9fb; color: var(--muted); font-weight: 550; }
+.fp-billing td small { display: block; color: var(--muted); font-size: 11px; margin-top: 5px; }
+.fp-event-error { max-width: 350px; color: #98671c; }
+@media (max-width: 1100px) { .fp-metrics { gap: 14px; } .fp-metrics strong { font-size: 20px; } }

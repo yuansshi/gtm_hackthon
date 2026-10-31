@@ -73,11 +73,11 @@ export default function IndustryApp() {
   };
   useEffect(() => { loadServer(state.businessId); }, [state.businessId]);
   useEffect(() => {
-    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running'))) return;
+    if (!connected || dirty || !(state.jobs?.some(j => j.status === 'running') || state.assistantRuns?.some(r => r.status === 'running') || state.enrichmentRuns?.some(r => r.status === 'running') || state.flexprice?.pendingCount > 0)) return;
     const id = state.businessId; const timer = setInterval(async () => {
       try { const next = await api(`/businesses/${id}`); if (activeBusiness.current === id && !dirtyRef.current) setState(next); } catch (e) { setConnectionError(e.message); }
     }, 1500); return () => clearInterval(timer);
-  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns]);
+  }, [connected, dirty, state.businessId, state.jobs, state.assistantRuns, state.enrichmentRuns, state.flexprice]);
   const perform = async (task, onError) => {
     const id = state.businessId; setBusy(true);
     try { return await task(id); } catch (e) { setToast(e.message); onError?.(e); return null; } finally { setBusy(false); }
@@ -145,6 +145,7 @@ export default function IndustryApp() {
         {connectionError?.includes('access token') && <form className="portal-login" onSubmit={async e => { e.preventDefault(); try { await connect(accessToken); setAccessToken(''); loadServer(state.businessId); } catch (error) { setConnectionError(error.message); } }}><label>Project access token<input type="password" value={accessToken} onChange={e => setAccessToken(e.target.value)} autoComplete="off" /></label><button className="button primary">Connect</button></form>}
         {dirty && <div className="notice warning"><span>Profile edits have not been saved to the server. Save before running downstream workflows.</span><button disabled={busy || !connected} className="button secondary" onClick={saveDraft}>Save profile</button></div>}
         <div className="runtime-status"><span><i className={connected ? 'online' : ''} />{busy ? 'Working…' : connected ? dirty ? 'Profile edits pending' : 'All changes saved' : 'Connecting to local server…'}</span><button onClick={() => setIntegrationOpen(true)}>Service connections</button></div>
+        {state.flexprice?.enabled && state.flexprice.pendingCount > 0 && view !== 'billing' && <div className="notice warning" role="status"><Wallet size={17}/><span>A project operation is in progress or its usage needs reconciliation before another credit-consuming action.</span><button className="button secondary" onClick={() => go('billing')}>Review billing status</button></div>}
         {view === 'overview' && <WorkspaceOverview business={business} state={state} go={go} exportBrief={exportBrief} />}
         {view === 'product' && <fieldset className="workflow-fieldset" disabled={busy || !connected}><ModuleOne key={state.businessId} business={business} state={state} change={change} approve={approve} saveDraft={saveDraft} exportBrief={exportBrief} go={go} act={act} busy={busy} /></fieldset>}
         {view === 'discovery' && <Discovery key={state.businessId} state={state} act={act} busy={busy || !connected || dirty} go={go} focusAccountId={accountFocus} onFocusHandled={() => setAccountFocus('')} viewRequest={accountViewRequest} />}

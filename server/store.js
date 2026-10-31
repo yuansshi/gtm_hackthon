@@ -47,6 +47,7 @@ export function createStore(directory) {
   db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS workspaces (business_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, state TEXT NOT NULL);');
   for (const b of businesses) db.prepare('INSERT OR IGNORE INTO workspaces VALUES (?, 0, ?)').run(b.id, JSON.stringify(initialRuntime(b.id)));
   const read = id => { assertBusiness(id); const row = db.prepare('SELECT revision,state FROM workspaces WHERE business_id=?').get(id); return { ...JSON.parse(row.state), revision: row.revision }; };
+  let meteringPolicy = null;
   const mutate = (id, fn, expectedRevision) => {
     assertBusiness(id); db.exec('BEGIN IMMEDIATE');
     try {
@@ -63,13 +64,16 @@ export function createStore(directory) {
     if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid metering amount');
     if (state.wallet.credits < credits) throw new AppError(402, `This action needs ${credits} credits; ${state.wallet.credits} remain.`, 'insufficient_credits');
     const entry = { id: randomUUID(), kind, credits, leadId, status: 'reserved', at: now(), externalStatus: 'not_connected' };
+    meteringPolicy?.reserve(state, entry);
     state.wallet.credits -= credits; state.wallet.ledger.unshift(entry); return entry.id;
   }).result;
-  const settle = (id, reservationId, success) => mutate(id, state => {
-    const entry = state.wallet.ledger.find(e => e.id === reservationId);
+  const settleUsageInState = (state, entry, success) => {
     if (!entry || entry.status !== 'reserved') return;
     entry.status = success ? 'consumed' : 'refunded';
     if (!success) state.wallet.credits += entry.credits;
-  });
-  return { read, mutate, reserve, settle, close: () => db.close(), directory };
+    meteringPolicy?.settle(state, entry, success);
+  };
+  const settle = (id, reservationId, success) => mutate(id, state => settleUsageInState(state, state.wallet.ledger.find(e => e.id === reservationId), success));
+  const meterSettledUsage = (state, entry) => { meteringPolicy?.reserve(state, entry); meteringPolicy?.settle(state, entry, true); return entry; };
+  return { read, mutate, reserve, settle, settleUsageInState, meterSettledUsage, setMeteringPolicy: policy => { meteringPolicy = policy; }, close: () => db.close(), directory };
 }

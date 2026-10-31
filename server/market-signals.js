@@ -14,7 +14,7 @@ export function markSignalProjection(store,id,projected) {
   const versions=new Map(projected.leads.map(lead=>[lead.id,digest(lead.marketSignals||[])]));
   store.mutate(id,state=>{for(const lead of state.leads)if(lead.signalGraphStatus==='pending'&&versions.get(lead.id)===digest(lead.marketSignals||[]))lead.signalGraphStatus='synced';});
 }
-export function createMarketSignals({store,graph,competitors,snapshot,profileDigest,exclusionReason,readSource}) {
+export function createMarketSignals({store,graph,competitors,snapshot,profileDigest,exclusionReason,readSource,beforeStart=async()=>{}}) {
   const inFlight=new Map();
   const scope=(state,lead)=>{
     if(!state.approved)throw new AppError(409,'Approve the current business profile before checking signals.','profile_approval_required');
@@ -65,11 +65,11 @@ export function createMarketSignals({store,graph,competitors,snapshot,profileDig
           if(invalidated)invalidateAccountDrafts(state,leadId,{reason:'market_signal_evidence_changed'});
           refreshExclusion(state,current);current.signalGraphStatus='pending';
           const success=pages.length>0;Object.assign(currentRun,{status:success?'completed':'failed',completedAt:now(),proposalCount:created,error:success?null:'No company source could be read. Reserved local credits were refunded.'});Object.assign(job,{status:currentRun.status,completedAt:currentRun.completedAt,error:currentRun.error});
-          const entry=state.wallet.ledger.find(entry=>entry.id===reservation);if(entry.status==='reserved'){entry.status=success?'consumed':'refunded';if(!success)state.wallet.credits+=entry.credits;}
+          const entry=state.wallet.ledger.find(entry=>entry.id===reservation);store.settleUsageInState(state,entry,success);
           addActivity(state,success?'Signal evidence ready':'Signal check failed',`${current.name}; ${created} new proposals; ${checked.filter(result=>!result.page).length} source failures. Buying intent remains unconfirmed.`,'Source monitor',{leadId,runId:run.id});
         });
         await project(id);
-      }catch(error){store.mutate(id,state=>{const current=account(state,leadId);const currentRun=current.signalMonitor?.runs.find(item=>item.id===run.id),job=state.jobs.find(item=>item.id===run.id);const detail=error instanceof AppError?error.message:'Signal processing failed. No new evidence was applied.';if(currentRun)Object.assign(currentRun,{status:'failed',completedAt:now(),sourceChecks:checked.map(result=>result.check),error:detail,errorCode:error.code||'signal_check_failed'});if(job)Object.assign(job,{status:'failed',completedAt:now(),error:detail});const entry=state.wallet.ledger.find(entry=>entry.id===reservation);if(entry?.status==='reserved'){entry.status='refunded';state.wallet.credits+=entry.credits;}});}
+      }catch(error){store.mutate(id,state=>{const current=account(state,leadId);const currentRun=current.signalMonitor?.runs.find(item=>item.id===run.id),job=state.jobs.find(item=>item.id===run.id);const detail=error instanceof AppError?error.message:'Signal processing failed. No new evidence was applied.';if(currentRun)Object.assign(currentRun,{status:'failed',completedAt:now(),sourceChecks:checked.map(result=>result.check),error:detail,errorCode:error.code||'signal_check_failed'});if(job)Object.assign(job,{status:'failed',completedAt:now(),error:detail});const entry=state.wallet.ledger.find(entry=>entry.id===reservation);store.settleUsageInState(state,entry,false);});}
     })().finally(()=>inFlight.delete(run.id));inFlight.set(run.id,completion);return {...run,completion};
   };
   const review=async(id,leadId,signalId,input)=>{
@@ -98,7 +98,7 @@ export function createMarketSignals({store,graph,competitors,snapshot,profileDig
     for(const id of ['allco','huasheng']){
       const state=store.read(id);if(state.jobs.some(job=>job.status==='running'))continue;
       const due=state.leads.find(lead=>lead.signalMonitor?.enabled&&Date.parse(lead.signalMonitor.nextCheckAt)<=Date.now());if(!due)continue;
-      try{await start(id,due.id,{requestId:randomUUID(),revision:state.revision},{scheduled:true}).completion;}
+      try{await beforeStart(id);await start(id,due.id,{requestId:randomUUID(),revision:store.read(id).revision},{scheduled:true}).completion;}
       catch(error){if(error.code==='job_running')continue;store.mutate(id,current=>{const lead=account(current,due.id);lead.signalMonitor.enabled=false;lead.signalMonitor.nextCheckAt=null;lead.signalMonitor.pausedReason=error instanceof AppError?error.message:'Scheduled source checks need review.';addActivity(current,'Signal schedule paused',`${lead.name}; ${lead.signalMonitor.pausedReason}`,'Source monitor',{leadId:lead.id});});}
     }
   };
